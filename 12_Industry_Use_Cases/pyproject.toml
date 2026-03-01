@@ -1,0 +1,90 @@
+[project]
+name = "agentic-automl"
+version = "0.1.0"
+description = "Agentic AutoML Platform for training ML models and fine-tuning LLMs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "AI Maker Space", email = "contact@aimakerspace.io" }
+]
+
+dependencies = [
+    # Web interface
+    "gradio>=5.0",
+    
+    # ML pipeline orchestration
+    "metaflow>=2.12",
+    
+    # Tabular ML
+    "scikit-learn>=1.5",
+    "xgboost>=2.0",
+    "lightgbm>=4.3",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    
+    # LLM Training
+    "trl>=0.12",
+    "transformers>=4.40",
+    "accelerate>=0.30",
+    "peft>=0.10",
+    "bitsandbytes>=0.43",
+    
+    # Data processing
+    "pypdf>=4.0",
+    
+    # Visualization
+    "matplotlib>=3.7",
+    
+    # Utilities
+    "joblib>=1.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.3",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "ruff>=0.15.2",
+]
