@@ -1,10 +1,20 @@
+import sys
+import logging
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import pandas as pd
-from metaflow import FlowSpec, Parameter, step
+from metaflow import FlowSpec, Parameter, step, card, current
+from metaflow.cards import Markdown, Table
 from sklearn.model_selection import train_test_split
 
 from src.ml.auto_ensemble import evaluate_model, train_ensemble
-from src.ml.data_validator import detect_task_type, validate_csv
-from src.utils.serialization import save_model
+from src.ml.data_validator import detect_task_type_and_recommend_model, validate_csv
+from src.utils.model_packaging import save_sklearn_model_package
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class MLTrainingFlow(FlowSpec):
@@ -34,12 +44,32 @@ class MLTrainingFlow(FlowSpec):
         """
         self.next(self.load_data)
 
+    @card
     @step
     def load_data(self):
         """
         Load the CSV file into a pandas DataFrame.
+
+        Creates a card showing data summary and column information.
         """
         self.df = pd.read_csv(self.data_path)
+
+        # Add data summary card
+        self.card = Markdown(
+            f"""
+        ## Data Loaded
+
+        - Rows: {len(self.df)}
+        - Columns: {len(self.df.columns)}
+        - File: {self.data_path}
+
+        ### Column Types
+        | Column | Type |
+        |--------|------|
+        {chr(10).join(f"| {col} | {dtype} |" for col, dtype in self.df.dtypes.items())}
+        """
+        )
+
         self.next(self.validate_data)
 
     @step
@@ -63,22 +93,56 @@ class MLTrainingFlow(FlowSpec):
         This step:
             - Separates features from target
             - One-hot encodes categorical columns
-            - Detects task type (classification/regression)
+            - Detects task type (classification/regression) using RAG-based model selection
             - Creates train/test split (80/20)
+        
+        Raises:
+            ValueError: If data preprocessing fails or target column is invalid
         """
-        y = self.df[self.target_column]
-        x_features = self.df.drop(columns=[self.target_column])
+        logger.info(f"preprocess: target_column={self.target_column}, df shape={self.df.shape}")
+        
+        try:
+            y = self.df[self.target_column]
+            x_features = self.df.drop(columns=[self.target_column])
+        except KeyError as e:
+            raise ValueError(f"Target column '{self.target_column}' not found in data: {e}")
+        except Exception as e:
+            raise ValueError(f"Failed to extract features/target: {e}")
 
         categorical_cols = x_features.select_dtypes(include=["object"]).columns.tolist()
         if categorical_cols:
+            logger.info(f"One-hot encoding {len(categorical_cols)} categorical columns")
             x_features = pd.get_dummies(x_features, columns=categorical_cols)
+        
+        logger.info("Detecting task type and recommending model...")
+        detection_result = None
+        
+        try:
+            detection_result = detect_task_type_and_recommend_model(self.df, self.target_column)
+            logger.info(f"Task type detected: {detection_result['task_type']}")
+            
+            if detection_result.get('fallback_used', False):
+                logger.warning("RAG/LLM services unavailable - using fallback model recommendation")
+            else:
+                logger.info(f"Model recommendation received (length: {len(detection_result.get('model_recommendation', ''))})")
+                
+        except ValueError as e:
+            logger.error(f"Task detection failed with validation error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Task detection failed with unexpected error: {e}")
+            raise RuntimeError(f"Failed to detect task type and recommend model: {e}")
 
-        self.task_type = detect_task_type(y)
+        self.task_type = detection_result["task_type"]
+        self.model_recommendation = detection_result["model_recommendation"]
+        self.fallback_used = detection_result.get("fallback_used", False)
 
+        logger.info(f"Performing train/test split (80/20)...")
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(
             x_features, y, test_size=0.2, random_state=42
         )
-
+        
+        logger.info(f"Training set: {len(self.x_train)} samples, Test set: {len(self.x_test)} samples")
         self.next(self.train_model)
 
     @step
@@ -93,6 +157,7 @@ class MLTrainingFlow(FlowSpec):
         self.estimators = result["estimators"]
         self.next(self.evaluate)
 
+    @card
     @step
     def evaluate(self):
         """
@@ -101,25 +166,62 @@ class MLTrainingFlow(FlowSpec):
         Computes appropriate metrics based on task type:
             - Classification: accuracy, f1_macro, precision_macro, recall_macro
             - Regression: mse, rmse, mae, r2
+
+        Creates a card showing evaluation metrics.
         """
         self.metrics = evaluate_model(self.model, self.x_test, self.y_test, self.task_type)
+
+        # Create metrics table based on task type
+        if self.task_type == "classification":
+            metrics_table = Table(
+                data=[
+                    ["Accuracy", f"{self.metrics.get('accuracy', 0):.2%}"],
+                    ["F1 (Macro)", f"{self.metrics.get('f1_macro', 0):.4f}"],
+                    ["Precision", f"{self.metrics.get('precision_macro', 0):.4f}"],
+                    ["Recall", f"{self.metrics.get('recall_macro', 0):.4f}"],
+                ],
+                headers=["Metric", "Value"],
+            )
+        else:
+            metrics_table = Table(
+                data=[
+                    ["RMSE", f"{self.metrics.get('rmse', 0):.4f}"],
+                    ["MAE", f"{self.metrics.get('mae', 0):.4f}"],
+                    ["R²", f"{self.metrics.get('r2', 0):.4f}"],
+                ],
+                headers=["Metric", "Value"],
+            )
+
+        # Add to card
+        current.card.append(metrics_table)
+
         self.next(self.save_model)
 
     @step
     def save_model(self):
         """
-        Save the trained model to disk.
-
-        Raises:
-            OSError: If the model cannot be saved.
+        Save the trained model to disk with full metadata.
         """
-        import os
-
         from src.config import settings
 
-        model_filename = f"ensemble_{self.task_type}_model.joblib"
-        model_path = os.path.join(settings.MODEL_DIR, model_filename)
-        self.model_path = save_model(self.model, model_path)
+        self.model_path = save_sklearn_model_package(
+            pipeline=self.model,
+            output_dir=settings.MODEL_DIR,
+            model_name=f"automl_{self.task_type}",
+            version=str(current.run_id),
+            task_type=self.task_type,
+            target_column=self.target_column,
+            feature_columns=list(self.x_train.columns),
+            metrics={
+                "accuracy" if self.task_type == "classification" else "rmse": self.metrics.get(
+                    "accuracy", 0
+                )
+                if self.task_type == "classification"
+                else self.metrics.get("rmse", float("inf"))
+            },
+        )
+
+        print(f"Model saved to {self.model_path}")
         self.next(self.end)
 
     @step
@@ -127,10 +229,14 @@ class MLTrainingFlow(FlowSpec):
         """
         Complete the flow and log final results.
         """
-        print("Training complete!")
-        print(f"Task type: {self.task_type}")
-        print(f"Metrics: {self.metrics}")
-        print(f"Model saved to: {self.model_path}")
+        logger.info("Training complete!")
+        logger.info(f"Task type: {self.task_type}")
+        
+        if getattr(self, 'fallback_used', False):
+            logger.warning("Model recommendation used fallback (RAG/LLM services were unavailable)")
+        
+        logger.info(f"Model saved to: {self.model_path}")
+        logger.info(f"Metrics: {self.metrics}")
 
 
 if __name__ == "__main__":

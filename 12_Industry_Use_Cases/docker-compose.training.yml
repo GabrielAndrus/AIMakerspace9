@@ -1,0 +1,25 @@
+services:
+  llm-training:
+    image: nvcr.io/nvidia/pytorch:26.01-py3
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - METAFLOW_DEFAULT_METADATA=local
+    volumes:
+      - .:/workspace
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: >
+      bash -c "
+        echo '=== Installing UV ===' &&
+        pip install --no-cache-dir uv &&
+        cd /workspace &&
+        echo '=== Installing Flash Attention (this may take a few minutes) ===' &&
+        uv pip install --system flash-attn --no-build-isolation 2>&1 | tail -5 &&
+        echo '=== Installing project dependencies ===' &&
+        uv sync --system &&
+        echo '=== Running training test ===' &&
+        python test_docker_training.py
+      "

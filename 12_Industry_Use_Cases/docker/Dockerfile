@@ -1,22 +1,20 @@
-FROM python:3.11-slim AS builder
+FROM nvcr.io/nvidia/pytorch:26.01-py3 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN which uv || pip install --no-cache-dir uv
 
-ENV UV_INSTALL_DIR=/root/.local/bin
-ENV PATH="${UV_INSTALL_DIR}:${PATH}"
-
-RUN python -m venv /opt/venv
+ENV UV_INSTALL_DIR=/opt/venv
+RUN uv venv /opt/venv
 
 WORKDIR /build
 
-COPY pyproject.toml uv.lock ./
+COPY README.md pyproject.toml uv.lock ./
 
-RUN uv pip install --python /opt/venv/bin/python -e .
+RUN UV_PYTHON=/opt/venv/bin/python uv pip install -e .
 
-FROM python:3.11-slim AS production
+FROM nvcr.io/nvidia/pytorch:26.01-py3 AS production
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -26,7 +24,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN useradd --create-home --shell /bin/bash appuser
 
 COPY --from=builder /opt/venv /opt/venv
-
 ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /app
