@@ -7,7 +7,7 @@ from sklearn.ensemble import VotingClassifier, VotingRegressor
 
 from src.ml.auto_ensemble import create_ensemble
 from src.ml.data_validator import detect_task_type, validate_csv
-from src.queue.job_manager import JobManager
+from src.job_queue.job_manager import JobManager
 
 
 @pytest.fixture

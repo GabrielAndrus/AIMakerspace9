@@ -25,6 +25,17 @@ echo "=========================================="
 echo "PYTHONUNBUFFERED=${PYTHONUNBUFFERED}"
 echo "PYTHONDONTWRITEBYTECODE=${PYTHONDONTWRITEBYTECODE}"
 
+echo ""
+echo "Checking GPU availability..."
+if command -v nvidia-smi &> /dev/null; then
+    echo "GPU detected:"
+    nvidia-smi --query-gpu=name,memory.total,memory.free,compute_cap --format=csv
+    echo ""
+else
+    echo "WARNING: No NVIDIA GPU detected. LLM training will run on CPU (very slow)."
+    echo "For GPU support, ensure nvidia-container-toolkit is installed on the host."
+fi
+
 mkdir -p /app/data
 
 echo "Initializing job queue database..."

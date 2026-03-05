@@ -12,6 +12,7 @@ def train_dpo(
     output_dir: str = "outputs",
     beta: float = 0.1,
     epochs: int = 1,
+    use_quantization: bool = True,
 ) -> str:
     """
     Train a model using Direct Preference Optimization (DPO) with TRL.
@@ -25,6 +26,8 @@ def train_dpo(
         output_dir: Directory to save the trained model and tokenizer.
         beta: KL penalty coefficient controlling deviation from reference model.
         epochs: Number of training epochs.
+        use_quantization: Whether to use 4-bit quantization. Set to False if
+                          bitsandbytes is not available or incompatible.
 
     Returns:
         Path to the output directory containing the trained model.
@@ -32,18 +35,26 @@ def train_dpo(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-        bnb_4bit_use_double_quant=True,
-    )
+    model_kwargs = {"device_map": "auto"}
+    
+    if use_quantization:
+        try:
+            import bitsandbytes
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+            )
+            model_kwargs["quantization_config"] = bnb_config
+        except (ImportError, RuntimeError) as e:
+            print(f"Warning: bitsandbytes not available ({e}), using float16 instead")
+            use_quantization = False
+    
+    if not use_quantization:
+        model_kwargs["torch_dtype"] = torch.float16
 
-    model = AutoModelForCausalLM.from_pretrained(
-        base_model,
-        quantization_config=bnb_config,
-        device_map="auto",
-    )
+    model = AutoModelForCausalLM.from_pretrained(base_model, **model_kwargs)
     tokenizer = AutoTokenizer.from_pretrained(base_model)
     tokenizer.pad_token = tokenizer.eos_token
 

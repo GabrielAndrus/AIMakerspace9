@@ -72,9 +72,8 @@ def train_ensemble(x_train: pd.DataFrame, y_train: pd.Series, task_type: str) ->
     ensemble.fit(x_train, y_train)
 
     estimators_dict = {}
-    for item in ensemble.estimators_:
-        if isinstance(item, tuple) and len(item) == 2:
-            estimators_dict[item[0]] = item[1]
+    for name, estimator in zip([n for n, _ in ensemble.estimators], ensemble.estimators_):
+        estimators_dict[name] = estimator
 
     return {"model": ensemble, "estimators": estimators_dict}
 
