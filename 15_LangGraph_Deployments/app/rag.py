@@ -7,6 +7,7 @@ This module builds an in-memory RAG pipeline that:
 - Exposes a LangChain Tool `retrieve_information` that retrieves relevant
   context and generates a response constrained to that context.
 """
+
 from __future__ import annotations
 
 import os
@@ -24,6 +25,7 @@ from langchain_openai import ChatOpenAI
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langgraph.graph import START, StateGraph
 
+
 def _tiktoken_len(text: str) -> int:
     """Return token length using tiktoken; used for chunk length measurement."""
     tokens = tiktoken.encoding_for_model("gpt-4o").encode(text)
@@ -32,6 +34,7 @@ def _tiktoken_len(text: str) -> int:
 
 class _RAGState(TypedDict):
     """State schema for the simple two-step RAG graph: retrieve then generate."""
+
     question: str
     context: list[Document]
     response: str
@@ -65,9 +68,16 @@ def _build_rag_graph(data_dir: str):
     chunks = text_splitter.split_documents(documents) if documents else []
 
     # Embeddings and vector store (in-memory Qdrant)
-    embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+    from langchain_community.embeddings import HuggingFaceEmbeddings
+
+    embedding_model = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
     qdrant_vectorstore = QdrantVectorStore.from_documents(
-        documents=chunks, embedding=embedding_model, location=":memory:", collection_name="rag_collection"
+        documents=chunks,
+        embedding=embedding_model,
+        location=":memory:",
+        collection_name="rag_collection",
     )
     retriever = qdrant_vectorstore.as_retriever()
 
@@ -78,7 +88,11 @@ def _build_rag_graph(data_dir: str):
         "Only use the provided context to answer the query. If you do not know the answer, or it's not contained in the provided context respond with \"I don't know\""
     )
     chat_prompt = ChatPromptTemplate.from_messages([("human", human_template)])
-    generator_llm = ChatOpenAI(model=os.environ.get("OPENAI_CHAT_MODEL", "gpt-4.1-nano"))
+    generator_llm = ChatOpenAI(
+        model=os.environ.get("OPENAI_MODEL", "minimax-m2.5-mlx@8bit"),
+        base_url="http://192.168.1.79:8080/v1",
+        api_key=os.environ.get("OPENAI_API_KEY", "EMPTY"),
+    )
 
     def retrieve(state: _RAGState) -> _RAGState:
         retrieved_docs = retriever.invoke(state["question"]) if retriever else []
@@ -106,7 +120,7 @@ def _get_rag_graph():
 
 @tool
 def retrieve_information(
-    query: Annotated[str, "query to ask the retrieve information tool"]
+    query: Annotated[str, "query to ask the retrieve information tool"],
 ):
     """Use Retrieval Augmented Generation to retrieve information about feline health, including life stage care, nutrition, vaccinations, parasite control, behavior, diagnostics, and veterinary guidelines for cats."""
     graph = _get_rag_graph()
@@ -115,5 +129,3 @@ def retrieve_information(
     if isinstance(result, dict) and "response" in result:
         return result["response"]
     return result
-
-

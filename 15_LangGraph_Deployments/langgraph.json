@@ -5,7 +5,8 @@
   "python_version": "3.13",
   "graphs": {
     "simple_agent": "app.graphs.simple_agent:graph",
-    "agent_with_helpfulness": "app.graphs.agent_with_helpfulness:graph"
+    "agent_with_helpfulness": "app.graphs.agent_with_helpfulness:graph",
+    "vibe_checker": "app.graphs.vibe_checker:graph"
   },
   "assistants": {
     "agent": {
@@ -17,6 +18,11 @@
       "graph_id": "agent_with_helpfulness",
       "name": "Agent with Helpfulness Check",
       "description": "Agent that uses tools and performs a helpfulness check with loop limit."
+    },
+    "vibe_checker": {
+      "graph_id": "vibe_checker",
+      "name": "Vibe Checker Agent",
+      "description": "Agent that checks if responses match a positive/casual vibe with loop limit."
     }
   }
 }

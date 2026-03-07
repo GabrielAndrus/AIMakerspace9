@@ -69,6 +69,7 @@ Have fun!
 What is the key architectural difference between the `simple_agent` and `agent_with_helpfulness` graphs? Specifically, explain how the helpfulness evaluation loop works and what mechanisms are in place to prevent it from running indefinitely.
 
 ##### Answer:
+The key difference is that `agent_with_helpfulness` adds a feedback loop where a secondary LLM evaluates whether the agent's response is helpful relative to the initial query, routing non-helpful responses back for another attempt. To prevent infinite loops, a hard limit of 10 messages forces termination regardless of the helpfulness evaluation.
 
 
 
@@ -76,6 +77,7 @@ What is the key architectural difference between the `simple_agent` and `agent_w
 What is the role of `langgraph.json` in the LangGraph Deployments? Describe each of its key fields and how the platform uses this file to discover and serve your graphs.
 
 ##### Answer:
+`langgraph.json` is the configuration manifest that LangGraph Deployments uses to discover and serve your graphs. It defines version, dependencies, python_version, env file location, a graphs mapping (graph ID to import path), and assistants (metadata for exposed endpoints including graph_id references).
 
 
 
@@ -83,6 +85,7 @@ What is the role of `langgraph.json` in the LangGraph Deployments? Describe each
 Create your own agent graph! Build a new graph in `app/graphs/` with a custom evaluation node (e.g., a vibe checker, a fact verifier, a summarizer — get creative!). Register it in `langgraph.json`, serve it with `uv run langgraph dev`
 
 ##### Answer:
+Created `app/graphs/vibe_checker.py` - an agent graph with a vibe checker evaluation node that checks if responses match a positive/casual (friendly, relaxed) vibe. Uses the same loop structure as helpfulness with a 10-message limit to prevent infinite loops. Registered in langgraph.json and tested successfully via the API.
 
 
 
