@@ -1,0 +1,109 @@
+============================================================
+Query 1: What are the key life stages for cats?
+------------------------------------------------------------
+
+[Fireworks API glm-4.7-flash] (14.22s):
+Based on the provided context, the key life stages for cats are:
+
+1.  **Kitten:** From birth up to 1 year.
+2.  **Young Adult:** From 1 year through 6 years.
+3.  **Mature Adult:** From 7 to 10 years.
+4.  **Senior:** Aged over 10 years.
+5.  **End-of-life:** Can occur at any age.
+
+[Local Model glm-5] (164.60s):
+Based on the provided documents, the key life stages for cats are defined by the 2021 AAHA/AAFP Feline Life Stage Guidelines as a five-stage grouping consisting of four distinct age-related stages and one situational stage:
+
+*   **Kitten:** From birth up to 1 year.
+*   **Young Adult:** From 1 year through 6 years.
+*   **Mature Adult:** From 7 to 10 years.
+*   **Senior:** Aged over 10 years.
+*   **End-of-Life:** Can occur at any age.
+
+============================================================
+Query 2: How often should kittens be vaccinated?
+------------------------------------------------------------
+
+[Fireworks API glm-4.7-flash] (20.30s):
+Based on the provided context, kittens should be revaccinated against FPV, FHV-1, and FCV at 6 months of age. For FeLV, it is recommended to revaccinate 12 months after the last dose in the kitten series.
+
+[Local Model glm-5] (204.73s):
+Based on the provided context, specific timing recommendations regarding vaccination for kittens include:
+
+*   **Revaccination at 6 months:** It is recommended to revaccinate against feline panleukopenia virus (FPV), feline herpesvirus type 1 (FHV-1), and feline calicivirus (FCV) at **6 months of age**. This aims to reduce the window of susceptibility in kittens with maternally derived antibodies following the end of the initial kitten series (which typically ends around 16–18 weeks).
+*   **FeLV Revaccination:** For feline leukemia virus (FeLV), which is considered core for kittens, revaccination is recommended **12 months after the last dose** in the kitten series.
+
+The context does not specify the exact frequency or intervals for the initial doses within the "kitten series" itself.
+
+============================================================
+Query 3: What is the recommended diet for senior cats?
+------------------------------------------------------------
+
+[Fireworks API glm-4.7-flash] (33.01s):
+Based on the provided context, the recommended diet for senior cats includes the following:
+
+*   **Energy Requirements:** The Resting Energy Requirement (RER) should be multiplied by a factor of 10–20% (and in some cases up to 25%) to determine the Daily Energy Requirement (DER).
+*   **Protein Levels:** Healthy senior cats should receive diets higher in protein to avoid loss of lean muscle mass. They should not be protein restricted; a diet with a minimum protein allowance of 30–45% dry matter is considered moderate protein and is recommended.
+*   **Therapeutic Diets:** Prescription therapeutic diets are often indicated for conditions such as chronic kidney disease, obesity, hyperthyroidism, chronic enteropathies, and osteoarthritis.
+*   **Specific Recommendations for Kidney Disease:** Cats with chronic kidney disease may benefit from prescription renal diets that feature restricted, high-quality protein and restricted phosphorus levels. For senior cats in early renal failure, a diet with highly bioavailable protein supplemented with fish oil, L-carnitine, antioxidants, and amino acids is beneficial.
+*   **Feeding Strategy:** Dietary changes should be implemented at home in a separate container to avoid stress-related food aversions.
+
+[Local Model glm-5] (202.44s):
+Based on the provided documents, here are the dietary recommendations for senior cats:
+
+*   **Energy Requirements:** Senior cats (over 10 years of age) often require increased caloric intake because they may experience a reduction in digestive capabilities and are prone to being underweight. The Resting Energy Requirements (RER) may need to be multiplied by a factor of 10–20%, and in some cases up to 25%.
+*   **Protein Levels:** Healthy mature adult and senior cats should not be protein restricted. To avoid the loss of lean muscle mass, they should receive diets with a minimum protein allowance of 30–45% dry matter (considered moderate protein).
+*   **Specific Conditions:**
+    *   Cats with chronic kidney disease may benefit from prescription renal diets that have restricted, high-quality protein and restricted phosphorus levels.
+    *   One study suggests senior cats in early renal failure may benefit from a diet with highly bioavailable protein supplemented with fish oil, L-carnitine, antioxidants, and amino acids.
+*   **Implementing Changes:** If a dietary change is indicated, it should be implemented in the home setting to avoid stress-related food aversions. The new diet should be offered in a separate, adjacent container rather than immediately replacing the usual food.
+
+============================================================
+Query 4: How can I prevent parasites in my cat?
+------------------------------------------------------------
+
+[Fireworks API glm-4.7-flash] (31.57s):
+Based on the provided context, you can prevent parasites in your cat by:
+
+*   **Using broad-spectrum products regularly:** This is recommended for the majority of pet cats regardless of their lifestyle.
+*   **Administering prophylactic treatment:** For kittens and newly adopted cats with an unknown medical history, it is prudent to administer treatment immediately.
+*   **Treating housemates:** Canine and feline housemates should be treated in synchronicity with newly acquired kittens or cats to prevent the transmission of parasites like roundworms and fleas.
+*   **Managing the environment:** Preventing cats' access to gardens and children's play sand areas can decrease environmental contamination with infectious agents such as hookworms and *Toxoplasma gondii*.
+*   **Considering lifestyle risks:** If your cat spends time outdoors, travels, boards, or is in a high-risk geographic area, the risk of parasitic infection increases. You should be particularly vigilant about preventing tick infestations and heartworm infection.
+*   **Using effective flea prevention:** This lowers the risk of cutaneous and systemic diseases and can reduce the risk of zoonotic diseases like cat scratch fever.
+
+[Local Model glm-5] (203.53s):
+Based on the provided documents, you can prevent parasites in your cat by taking the following steps:
+
+*   **Use broad-spectrum products:** Administer prophylactic treatments using products that are effective against heartworms, intestinal parasites, and fleas. This is particularly recommended for kittens and newly adopted cats with an unknown medical history.
+*   **Maintain a regular routine:** Use broad-spectrum products routinely and regularly, regardless of the cat's lifestyle (even for indoor cats).
+*   **Treat other pets simultaneously:** Treat any canine or feline housemates at the same time to prevent transmission of parasites like roundworms and fleas.
+*   **Restrict environmental access:** Prevent your cat from accessing gardens and children's play sand areas. This helps decrease environmental contamination with infectious agents such as hookworms and *Toxoplasma gondii*.
+*   **Prevent ticks and fleas:** Implement ectoparasite prevention to lower the risk of cutaneous and systemic diseases. Regular flea prevention can also reduce the risk of zoonotic diseases like cat scratch fever (*Bartonella henselae*).
+
+============================================================
+Query 5: What behavioral changes indicate illness in cats?
+------------------------------------------------------------
+
+[Fireworks API glm-4.7-flash] (41.27s):
+Based on the provided context, the following behavioral changes may indicate illness in cats:
+
+*   **Grooming Habits:**
+    *   **Increased grooming** may signal dermatologic issues such as atopy, food allergy, immune-mediated skin conditions, infectious or parasitic disease, endocrine conditions, or paraneoplastic syndrome.
+    *   **Reduced grooming** may indicate underlying illness, bladder pain, degenerative joint disease (DJD) pain, or reduced mobility.
+*   **Activity and Demeanor:**
+    *   **Changes in demeanor, activity level, and behavior** are key indicators to note and trend over time.
+    *   **Increased nocturnal activity and vocalization** may indicate cognitive dysfunction, disease-reduced mobility, pain, or reduced vision.
+    *   **Reduced jumping or climbing** (such as not getting on counters or not liking a window seat) may indicate osteoarthritis or reduced mobility.
+*   **Elimination:**
+    *   **House-soiling** (marking or toileting outside the litter box) is a common reason for seeking veterinary advice and can indicate underlying issues.
+
+[Local Model glm-5] (224.22s):
+Based on the provided documents, the following behavioral changes can indicate illness or underlying conditions in cats:
+
+*   **Changes in Grooming Habits:** Increased grooming may signal dermatologic issues (such as atopy, food allergies, or parasitic diseases), endocrine conditions, or paraneoplastic syndromes. Reduced grooming can indicate underlying illness, bladder pain, degenerative joint disease (DJD) pain, or reduced mobility.
+*   **Changes in Activity and Mobility:** A decrease in activity level or exercise tolerance may suggest cardiac conditions like hypertrophic cardiomyopathy. Changes in normal habits, such as a cat "not getting on the counters as much" or no longer using a window seat, can indicate arthritis or DJD.
+*   **Vocalization and Sleep Patterns:** Increased nocturnal activity and vocalization (particularly in mature adult or senior cats) may indicate cognitive dysfunction, disease-reduced mobility, pain, or reduced vision.
+*   **Elimination Behaviors:** House-soiling (marking or toileting outside the litter box) is a common reason for owners to seek veterinary advice.
+*   **Demeanor:** Changes in demeanor are noted as key indicators to monitor, particularly in kittens.
+*   **Gastrointestinal Signs:** Vomiting (including hairballs) and diarrhea can indicate early stages of disease, though some clients may mistakenly view these as normal behaviors.

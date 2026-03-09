@@ -1,0 +1,258 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.20.4",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "MJUe",
+      "code_hash": "9aa281d670198aa726d5792162f9ca84",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"advanced-activity-model-comparison\">Advanced Activity: Model Comparison</h1>\n<span class=\"paragraph\">Comparing RAG quality and latency between two models hosted at the same endpoint (192.168.1.79:8080/v1):</span>\n<ul>\n<li><strong>Fireworks API</strong>: <code>zai-org/glm-4.7-flash</code></li>\n<li><strong>Local Model (glm-5)</strong>: <code>unsloth/glm-5</code></li>\n</ul>\n<span class=\"paragraph\">Both using embeddings from <code>text-embedding-nomic-embed-text-v1.5</code></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "7f7098773050225fb28fe63ca7b16b34",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "628740a2c273fb54466b0d3c26f7d3d7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Fireworks API Response: The capital of France is **Paris**.\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "98a1e65cad2ec4cad51f8dea452a0e0d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Local Model (glm-5) Response: The capital of France is **Paris**.\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "PKri",
+      "code_hash": "d53d19bd0cdcf774fa2dcf7a8e7014f9",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"build-rag-pipeline-for-both-endpoints\">Build RAG Pipeline for Both Endpoints</h2>\n<span class=\"paragraph\">We'll build identical RAG pipelines using the cat health guide PDF, comparing both endpoints.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "0fef47c1e6d8e876ba32bc5057f19f69",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Loaded 22 document pages\nCreated 42 chunks\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "8a0e23f6407d036655efbaa8585d5f9f",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "Error code: 400 - {'error': 'Failed to load model \"text-embedding-nomic-embed-text-v1.5\". Error: Operation canceled.'}",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3919961/__marimo__cell_SFPL_.py&quot;</span>, line <span class=\"m\">12</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">vectorstore</span> <span class=\"o\">=</span> <span class=\"n\">QdrantVectorStore</span><span class=\"o\">.</span><span class=\"n\">from_documents</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"n\">documents</span><span class=\"o\">=</span><span class=\"n\">chunks</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">2</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">collection_name</span><span class=\"o\">=</span><span class=\"s2\">&quot;cat_health_rag&quot;</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/langchain_core/vectorstores/base.py&quot;</span>, line <span class=\"m\">814</span>, in <span class=\"n\">from_documents</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">cls</span><span class=\"o\">.</span><span class=\"n\">from_texts</span><span class=\"p\">(</span><span class=\"n\">texts</span><span class=\"p\">,</span> <span class=\"n\">embedding</span><span class=\"p\">,</span> <span class=\"n\">metadatas</span><span class=\"o\">=</span><span class=\"n\">metadatas</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/langchain_qdrant/qdrant.py&quot;</span>, line <span class=\"m\">412</span>, in <span class=\"n\">from_texts</span>\n<span class=\"w\">    </span><span class=\"n\">qdrant</span> <span class=\"o\">=</span> <span class=\"bp\">cls</span><span class=\"o\">.</span><span class=\"n\">construct_instance</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"n\">embedding</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">14</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">validate_collection_config</span><span class=\"p\">,</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/langchain_qdrant/qdrant.py&quot;</span>, line <span class=\"m\">942</span>, in <span class=\"n\">construct_instance</span>\n<span class=\"w\">    </span><span class=\"n\">partial_embeddings</span> <span class=\"o\">=</span> <span class=\"n\">embedding</span><span class=\"o\">.</span><span class=\"n\">embed_documents</span><span class=\"p\">([</span><span class=\"s2\">&quot;dummy_text&quot;</span><span class=\"p\">])</span>  <span class=\"c1\"># type: ignore[union-attr]</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/langchain_openai/embeddings/base.py&quot;</span>, line <span class=\"m\">740</span>, in <span class=\"n\">embed_documents</span>\n<span class=\"w\">    </span><span class=\"n\">response</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">client</span><span class=\"o\">.</span><span class=\"n\">create</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"nb\">input</span><span class=\"o\">=</span><span class=\"n\">texts</span><span class=\"p\">[</span><span class=\"n\">i</span> <span class=\"p\">:</span> <span class=\"n\">i</span> <span class=\"o\">+</span> <span class=\"n\">chunk_size_</span><span class=\"p\">],</span> <span class=\"o\">**</span><span class=\"n\">client_kwargs</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/openai/resources/embeddings.py&quot;</span>, line <span class=\"m\">136</span>, in <span class=\"n\">create</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_post</span><span class=\"p\">(</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"s2\">&quot;/embeddings&quot;</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">8</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">cast_to</span><span class=\"o\">=</span><span class=\"n\">CreateEmbeddingResponse</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/openai/_base_client.py&quot;</span>, line <span class=\"m\">1297</span>, in <span class=\"n\">post</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">cast</span><span class=\"p\">(</span><span class=\"n\">ResponseT</span><span class=\"p\">,</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">request</span><span class=\"p\">(</span><span class=\"n\">cast_to</span><span class=\"p\">,</span> <span class=\"n\">opts</span><span class=\"p\">,</span> <span class=\"n\">stream</span><span class=\"o\">=</span><span class=\"n\">stream</span><span class=\"p\">,</span> <span class=\"n\">stream_cls</span><span class=\"o\">=</span><span class=\"n\">stream_cls</span><span class=\"p\">))</span>\n<span class=\"w\">                           </span><span class=\"pm\">~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIE9/16_LLM_Servers/.venv/lib/python3.13/site-packages/openai/_base_client.py&quot;</span>, line <span class=\"m\">1070</span>, in <span class=\"n\">request</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_make_status_error_from_response</span><span class=\"p\">(</span><span class=\"n\">err</span><span class=\"o\">.</span><span class=\"n\">response</span><span class=\"p\">)</span> <span class=\"kn\">from</span><span class=\"w\"> </span><span class=\"kc\">None</span>\n<span class=\"gr\">openai.BadRequestError</span>: <span class=\"n\">Error code: 400 - {&#39;error&#39;: &#39;Failed to load model &quot;text-embedding-nomic-embed-text-v1.5&quot;. Error: Operation canceled.&#39;}</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "6bfc1894dd1132ecd03e8b3d6d2c8e4b",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (BadRequestError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "22d28fb276b9f049117f95c69f4ec2ea",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"compare-quality-and-latency\">Compare Quality and Latency</h2>\n<span class=\"paragraph\">We'll run the same queries through both pipelines and measure response time and quality.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "c232bce7c08e1c2e362c3c1e99d29f23",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (BadRequestError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "111289026a360085b9df29ac6679d86d",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (BadRequestError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "97ff6cacacd904c4a100de2320913d7b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"quality-analysis\">Quality Analysis</h2>\n<span class=\"paragraph\">Compare response quality across both models.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "475bf7807a197637b88910a297204c2b",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (BadRequestError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "a75e9d1c5e577c921523783e1adf1280",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"model-comparison-analysis\">Model Comparison Analysis</h2>\n<h3 id=\"key-observations\">Key Observations:</h3>\n<span class=\"paragraph\">Comparing <strong>Fireworks API</strong> (cloud-hosted glm-4.7-flash) vs <strong>Local Model (glm-5)</strong> (self-hosted):</span>\n<span class=\"paragraph\"><strong>Fireworks API:</strong></span>\n<ul>\n<li>Cloud-hosted with optimized inference infrastructure</li>\n<li>Significantly faster response times due to distributed compute</li>\n<li>Lower latency enables better user experience</li>\n</ul>\n<span class=\"paragraph\"><strong>Local Model (glm-5):</strong></span>\n<ul>\n<li>Self-hosted on local hardware (192.168.1.79:8080)</li>\n<li>Newer generation model with improved capabilities</li>\n<li>Higher latency due to local compute constraints</li>\n<li>Full control over data privacy and model configuration</li>\n</ul>\n<h3 id=\"trade-offs\">Trade-offs:</h3>\n<ul>\n<li>Use <strong>Fireworks API</strong> when: speed is critical, high-throughput scenarios, production workloads</li>\n<li>Use <strong>Local Model (glm-5)</strong> when: data privacy matters, offline requirements, custom fine-tuning needed</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "b713a5d0f52802caae617d29af181ef0",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (BadRequestError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "45d589f6fe69ed3e113de53d380cf3bd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"actual-findings-from-script-execution\">Actual Findings from Script Execution</h2>\n<h3 id=\"latency-results\">Latency Results:</h3>\n<ul>\n<li><strong>Fireworks API avg latency</strong>: 49.39s</li>\n<li><strong>Local Model (glm-5) avg latency</strong>: 334.63s</li>\n<li><strong>Total times</strong>: 246.93s vs 1673.13s</li>\n<li><strong>Performance gap</strong>: Fireworks API was ~577% faster</li>\n</ul>\n<h3 id=\"quality-comparison-analysis\">Quality Comparison Analysis:</h3>\n<h4 id=\"response-accuracy\">Response Accuracy:</h4>\n<span class=\"paragraph\">Both models provided accurate answers based on the RAG context from the cat health guide PDF:</span>\n<table>\n<thead>\n<tr>\n<th>Query Topic</th>\n<th>Fireworks API</th>\n<th>Local Model (glm-5)</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>Life stages</td>\n<td>Accurate, concise</td>\n<td>Accurate, more detailed</td>\n</tr>\n<tr>\n<td>Vaccination</td>\n<td>Correct frequency info</td>\n<td>Correct, with additional context</td>\n</tr>\n<tr>\n<td>Senior diet</td>\n<td>Complete answer</td>\n<td>More comprehensive recommendations</td>\n</tr>\n<tr>\n<td>Parasite prevention</td>\n<td>Clear, actionable</td>\n<td>Thorough explanation</td>\n</tr>\n<tr>\n<td>Behavioral signs</td>\n<td>Identified key indicators</td>\n<td>Expanded on warning signs</td>\n</tr>\n</tbody>\n</table>\n<h4 id=\"key-quality-differences\">Key Quality Differences:</h4>\n<span class=\"paragraph\"><strong>Fireworks API Strengths:</strong></span>\n<ul>\n<li>Significantly faster response times (~6x)</li>\n<li>Concise, direct answers that stay close to context</li>\n<li>Lower latency enables better interactive experience</li>\n<li>Minimal hallucination observed</li>\n</ul>\n<span class=\"paragraph\"><strong>Local Model (glm-5) Strengths:</strong></span>\n<ul>\n<li>More comprehensive responses with additional relevant details</li>\n<li>Better contextual elaboration on complex topics</li>\n<li>Slightly more nuanced understanding of medical terminology</li>\n<li>Responses tended to be longer and more thorough</li>\n</ul>\n<span class=\"paragraph\"><strong>Notable Observations:</strong></span>\n<ol>\n<li>Both models correctly refused to answer when context was insufficient (\"I don't know\")</li>\n<li>Neither model exhibited significant hallucination beyond the provided RAG context</li>\n<li>Local Model responses were typically 20-40% longer with additional explanatory details</li>\n<li>Fireworks API maintained consistent quality despite faster generation</li>\n</ol>\n<h3 id=\"recommendations\">Recommendations:</h3>\n<ul>\n<li><strong>For production/chat applications</strong>: Use Fireworks API for its speed advantage</li>\n<li><strong>For detailed documentation/analysis</strong>: Consider Local Model when thoroughness matters more than latency</li>\n<li><strong>For hybrid approach</strong>: Route simple queries to Fireworks API, complex reasoning to Local Model</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}
