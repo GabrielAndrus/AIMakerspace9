@@ -17,6 +17,11 @@ An intelligent platform for ML model training and LLM fine-tuning with agentic R
   - Qdrant vector database for semantic search
   - Qwen3-Embedding-4B for embeddings
 
+- **Deep Error Investigation Agent**
+  - Multi-agent LangGraph system for debugging ML/LLM errors
+  - Semantic memory with Qdrant for learning from past errors
+  - Automatic search query refinement for better solutions
+
 - **Observability**
   - Langfuse integration for experiment tracking and monitoring
 
@@ -49,7 +54,12 @@ python src/app.py
 │   ├── retrieval/          # Vector search and indexing
 │   │   └── indexer.py      # Knowledge base indexer
 │   ├── training/           # Training pipelines
-│   └── agents/             # Agentic components
+│   └── agent/              # Agentic components
+│       ├── error_investigator.py    # Deep error investigation agent
+│       ├── investigation_graph.py   # LangGraph orchestration
+│       ├── investigation_memory.py  # Qdrant semantic memory
+│       ├── investigation_planner.py # Planning logic
+│       └── sub_agents/     # Specialized agent nodes
 ├── data/
 │   └── examples/           # Sample datasets for testing
 ├── docker-compose.yml      # Docker services (Qdrant, Langfuse)

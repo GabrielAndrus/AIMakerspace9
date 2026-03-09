@@ -1,5 +1,6 @@
 import json
 import os
+import warnings
 from typing import Any
 
 import pandas as pd
@@ -7,6 +8,7 @@ from datasets import Dataset
 from langfuse import get_client
 from ragas import evaluate
 from ragas.metrics import faithfulness, context_precision, context_recall
+from ragas.run_config import RunConfig
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -220,25 +222,45 @@ Answer:"""
 
 Answer: This question can be addressed using scikit-learn based on the retrieved documentation."""
 
-    def _extract_metric_value(self, result: dict, metric_name: str) -> float:
-        """Extract a single numeric value from RAGAS result, handling various formats."""
-        value = result.get(metric_name)
+    def _extract_metric_value(self, result, metric_name: str) -> float:
+        """Extract a single numeric value from RAGAS EvaluationResult, handling various formats.
         
-        if value is None:
-            return 0.0
+        Args:
+            result: Either a dict, EvaluationResult object, or pandas DataFrame
+            metric_name: Name of the metric to extract (e.g., 'faithfulness')
         
-        if isinstance(value, (int, float)):
-            return float(value)
-        
-        if isinstance(value, list):
-            if len(value) > 0:
-                if isinstance(value[0], (int, float)):
-                    return float(value[0])
-            return 0.0
-        
+        Returns:
+            float: The extracted score value
+        """
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            if hasattr(result, 'scores'):
+                value = result.scores[0].get(metric_name)
+            elif hasattr(result, 'to_pandas'):
+                df = result.to_pandas()
+                if metric_name in df.columns:
+                    value = df[metric_name].iloc[0]
+                else:
+                    return 0.0
+            elif isinstance(result, dict):
+                value = result.get(metric_name)
+            else:
+                return 0.0
+            
+            if value is None:
+                return 0.0
+            
+            if isinstance(value, (int, float)):
+                return float(value)
+            
+            if hasattr(value, 'item'):
+                return float(value.item())
+            
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return 0.0
+        except Exception as e:
+            warnings.warn(f"Failed to extract metric '{metric_name}': {e}", stacklevel=2)
             return 0.0
 
     def _submit_langfuse_scores(
@@ -282,18 +304,39 @@ Answer: This question can be addressed using scikit-learn based on the retrieved
         context_recall_score = 0.5 if ground_truth else 0.0
 
         if self.llm_available and self.ragas_llm:
-            metrics = [faithfulness, context_precision, context_recall]
-            for metric in metrics:
-                metric.llm = self.ragas_llm
+            try:
+                metrics = [faithfulness, context_precision, context_recall]
+                for metric in metrics:
+                    metric.llm = self.ragas_llm
 
-            result = evaluate(
-                dataset=dataset,
-                metrics=metrics,
-            )
+                run_config = RunConfig(
+                    timeout=300,
+                    max_retries=3,
+                    max_wait=30
+                )
 
-            faithfulness_score = self._extract_metric_value(result, "faithfulness")
-            context_precision_score = self._extract_metric_value(result, "context_precision")
-            context_recall_score = self._extract_metric_value(result, "context_recall")
+                result = evaluate(
+                    dataset=dataset,
+                    metrics=metrics,
+                    run_config=run_config
+                )
+
+                faithfulness_score = self._extract_metric_value(result, "faithfulness")
+                context_precision_score = self._extract_metric_value(result, "context_precision")
+                context_recall_score = self._extract_metric_value(result, "context_recall")
+
+            except TimeoutError as e:
+                warnings.warn(
+                    f"RAGAS evaluation timed out for question: {question[:50]}... "
+                    f"Using default scores. Error: {e}",
+                    stacklevel=2
+                )
+            except Exception as e:
+                warnings.warn(
+                    f"RAGAS evaluation failed for question: {question[:50]}... "
+                    f"Using default scores. Error: {e}",
+                    stacklevel=2
+                )
 
         if self.langfuse_available and self.langfuse:
             with self.langfuse.start_as_current_observation(as_type="span", name="single_evaluation") as span:

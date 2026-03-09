@@ -1,5 +1,6 @@
 from typing import Union
 
+import numpy as np
 import pandas as pd
 from lightgbm import LGBMClassifier, LGBMRegressor
 from sklearn.ensemble import (
@@ -10,6 +11,7 @@ from sklearn.ensemble import (
 )
 from sklearn.metrics import (
     accuracy_score,
+    confusion_matrix,
     f1_score,
     mean_absolute_error,
     mean_squared_error,
@@ -90,7 +92,7 @@ def evaluate_model(model, x_test: pd.DataFrame, y_test: pd.Series, task_type: st
 
     Returns:
         Dictionary with metric names as keys and metric values as values.
-        For classification: accuracy, f1_macro, precision_macro, recall_macro
+        For classification: accuracy, f1_macro, precision_macro, recall_macro, confusion_matrix
         For regression: mse, rmse, mae, r2
 
     Raises:
@@ -99,19 +101,21 @@ def evaluate_model(model, x_test: pd.DataFrame, y_test: pd.Series, task_type: st
     y_pred = model.predict(x_test)
 
     if task_type == "classification":
+        cm = confusion_matrix(y_test, y_pred)
         return {
-            "accuracy": accuracy_score(y_test, y_pred),
-            "f1_macro": f1_score(y_test, y_pred, average="macro"),
-            "precision_macro": precision_score(y_test, y_pred, average="macro"),
-            "recall_macro": recall_score(y_test, y_pred, average="macro"),
+            "accuracy": float(accuracy_score(y_test, y_pred)),
+            "f1_macro": float(f1_score(y_test, y_pred, average="macro")),
+            "precision_macro": float(precision_score(y_test, y_pred, average="macro")),
+            "recall_macro": float(recall_score(y_test, y_pred, average="macro")),
+            "confusion_matrix": cm.tolist(),
         }
     elif task_type == "regression":
         mse = mean_squared_error(y_test, y_pred)
         return {
-            "mse": mse,
+            "mse": float(mse),
             "rmse": float(mse**0.5),
-            "mae": mean_absolute_error(y_test, y_pred),
-            "r2": r2_score(y_test, y_pred),
+            "mae": float(mean_absolute_error(y_test, y_pred)),
+            "r2": float(r2_score(y_test, y_pred)),
         }
     else:
         raise ValueError(f"task_type must be 'classification' or 'regression', got '{task_type}'")

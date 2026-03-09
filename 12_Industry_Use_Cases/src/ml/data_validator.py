@@ -281,7 +281,7 @@ def detect_task_type_and_recommend_model(
     task_type = detect_task_type(y)
     logger.info(f"Task type detected: {task_type}")
 
-    inference_url = os.getenv("LLM_INFERENCE_URL", "http://host.docker.internal:8080/v1")
+    inference_url = os.getenv("LLM_INFERENCE_URL", "http://192.168.1.185:8080/v1")
     inference_key = os.getenv("LLM_INFERENCE_KEY", "not-needed")
 
     column_types = get_column_types(df)

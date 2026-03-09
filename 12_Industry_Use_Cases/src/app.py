@@ -1,5 +1,6 @@
 import json
 import os
+import traceback
 from typing import Generator, Optional
 
 import gradio as gr
@@ -15,6 +16,34 @@ from src.ml.auto_ensemble import evaluate_model, train_ensemble
 from src.ml.data_validator import detect_task_type, get_column_types, validate_csv
 from src.job_queue.job_manager import JobManager
 from src.utils.error_handling import format_exception_for_user, create_user_error
+from src.utils.model_packaging import create_downloadable_zip
+
+
+def _investigate_inference_error(
+    error: Exception,
+    tb_str: str,
+    task_type: str,
+    model_path: Optional[str] = None,
+    prompt: Optional[str] = None,
+):
+    """Investigate an inference error and print recommendations."""
+    try:
+        from src.agent.error_investigator import investigate_error
+        
+        print("\n" + "=" * 60)
+        print("⚠️  INFERENCE ERROR OCCURRED - Starting Error Investigation")
+        print("=" * 60)
+        
+        for message in investigate_error(
+            error=error,
+            traceback_str=tb_str,
+            task_type=task_type,
+            model_path=model_path,
+        ):
+            print(message)
+            
+    except Exception as e:
+        print(f"[ErrorInvestigator] Failed to investigate error: {e}")
 
 job_manager = JobManager(db_path=settings.JOB_DB_PATH)
 
@@ -172,7 +201,7 @@ def train_tabular_model(
     filepath: Optional[str],
     target_column: Optional[str],
     progress: gr.Progress = None,
-) -> tuple[str, str, str, str, str, gr.Plot, gr.JSON, gr.Dataframe]:
+) -> tuple[str, str, str, str, str, gr.Plot, gr.JSON, gr.Dataframe, str]:
     if progress is None:
         def progress(x, desc=""):
             pass
@@ -180,23 +209,25 @@ def train_tabular_model(
     if filepath is None:
         return (
             format_error_html("Please upload a CSV file first."),
-            "",
+            gr.File(),
             "",
             "",
             "",
             gr.Plot(),
             gr.Dataframe(value=None),
+            "",
         )
 
     if target_column is None or target_column == "":
         return (
             format_error_html("Please select a target column."),
-            "",
+            gr.File(),
             "",
             "",
             "",
             gr.Plot(),
             gr.Dataframe(value=None),
+            "",
         )
 
     progress(0.05, desc="[1/5] Validating data...")
@@ -205,12 +236,13 @@ def train_tabular_model(
     if not result["valid"]:
         return (
             format_error_html(result["message"]),
-            "",
+            gr.File(),
             "",
             "",
             "",
             gr.Plot(),
             gr.Dataframe(value=None),
+            "",
         )
 
     progress(0.15, desc="[2/5] Analyzing features...")
@@ -283,10 +315,29 @@ def train_tabular_model(
         feature_importances = {}
         try:
             model = joblib.load(model_file)
+            features_df = df.drop(columns=[target_column])
+            
             if hasattr(model, "feature_importances_"):
-                features_df = df.drop(columns=[target_column])
                 for name, importance in zip(features_df.columns, model.feature_importances_):
                     feature_importances[name] = float(importance)
+            elif hasattr(model, "estimators_"):
+                importances_list = []
+                for estimator in model.estimators_:
+                    if hasattr(estimator, "feature_importances_"):
+                        importances_list.append(estimator.feature_importances_)
+                if importances_list:
+                    mean_importances = np.mean(importances_list, axis=0)
+                    for name, importance in zip(features_df.columns, mean_importances):
+                        feature_importances[name] = float(importance)
+            elif hasattr(model, "coef_"):
+                coef = np.abs(model.coef_)
+                if coef.ndim == 1:
+                    for name, importance in zip(features_df.columns, coef):
+                        feature_importances[name] = float(importance)
+                else:
+                    mean_coef = np.mean(coef, axis=0)
+                    for name, importance in zip(features_df.columns, mean_coef):
+                        feature_importances[name] = float(importance)
         except Exception:
             pass
 
@@ -310,15 +361,19 @@ def train_tabular_model(
 
         confusion_data = None
         if task_type == "classification" and "confusion_matrix" in metrics:
-            cm = np.array(metrics["confusion_matrix"])
-            classes = (
-                list(y.unique())
-                if len(list(y.unique())) == cm.shape[0]
-                else [f"Class {i}" for i in range(cm.shape[0])]
-            )
-            confusion_data = pd.DataFrame(cm, index=classes, columns=classes)
+            try:
+                cm = np.array(metrics["confusion_matrix"])
+                if cm.ndim == 2 and cm.shape[0] > 0:
+                    unique_classes = list(y.unique())
+                    if len(unique_classes) == cm.shape[0] and len(unique_classes) == cm.shape[1]:
+                        classes = unique_classes
+                    else:
+                        classes = [f"Class {i}" for i in range(cm.shape[0])]
+                    confusion_data = pd.DataFrame(cm, index=classes, columns=classes)
+            except Exception:
+                confusion_data = None
 
-        success_msg = format_success_html(f"Training complete! Model saved to: {model_path}")
+        success_msg = format_success_html(f"Training complete! Model saved to: {model_file}")
         
         print(f"[DEBUG] model_file being returned: '{model_file}'")
         print(f"[DEBUG] Is file? {os.path.isfile(model_file)}, Is dir? {os.path.isdir(model_file)}")
@@ -331,6 +386,7 @@ def train_tabular_model(
             json.dumps(metrics, indent=2),
             gr.Plot(value=fig),
             confusion_data if confusion_data is not None else pd.DataFrame(),
+            model_file,
         )
 
     except Exception as e:
@@ -341,12 +397,13 @@ def train_tabular_model(
         job_manager.fail_job(job_id, str(e))
         return (
             format_error_html(f"Training failed: {str(e)}"),
-            "",
+            gr.File(),
             "",
             "",
             "",
             gr.Plot(),
             pd.DataFrame(),
+            "",
         )
 
 
@@ -373,6 +430,8 @@ def load_model_for_inference(
         )
 
     except Exception as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "ml_inference", model_path=model_path)
         return format_error_html(f"Failed to load model: {str(e)}"), gr.JSON(value={})
 
 
@@ -397,6 +456,8 @@ def predict_with_model(model_path: str, input_data: str) -> str:
         return format_error_html("Invalid JSON input. Please provide valid JSON.")
 
     except Exception as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "ml_inference", model_path=model_path)
         return format_error_html(f"Prediction failed: {str(e)}")
 
 
@@ -513,6 +574,7 @@ def create_tabular_ml_tab() -> gr.Tab:
                 metrics_json,
                 feature_importance_plot,
                 confusion_matrix_display,
+                inference_model_path,
             ],
         )
 
@@ -564,6 +626,8 @@ Your selection will be used.
         artifacts = get_flow_artifacts(run_id)
         model_path = artifacts.get("model_path", "")
         
+        zip_path = create_downloadable_zip(model_path)
+        
         success_msg = f"""
 {analysis_report}
 <hr>
@@ -573,12 +637,27 @@ Run ID: {run_id}<br>
 Model saved to: {model_path}
 </div>"""
         
-        return (success_msg, model_path)
+        return (success_msg, zip_path)
     
     except Exception as e:
         import traceback
         
         tb_str = traceback.format_exc()
+        
+        # Run error investigation
+        _investigate_training_error(
+            error=e,
+            tb_str=tb_str,
+            task_type="llm_training",
+            flow_name="LLMTrainingFlow",
+            flow_args={
+                "data_path": train_file,
+                "training_method": training_method,
+                "base_model": base_model,
+                "epochs": epochs,
+                "learning_rate": learning_rate,
+            },
+        )
         
         diagnosis = ""
         error_msg = str(e).lower()
@@ -844,10 +923,16 @@ def load_lora_adapter(
         )
 
     except FileNotFoundError as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
         return format_error_html(f"File not found: {e}"), gr.Dropdown()
     except ValueError as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
         return format_error_html(f"Invalid configuration: {e}"), gr.Dropdown()
     except Exception as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
         return format_error_html(f"Error loading model: {e}"), gr.Dropdown()
 
 
@@ -888,8 +973,12 @@ def generate_with_lora(
         return response
 
     except RuntimeError as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference")
         return format_error_html(f"Generation error: {e}")
     except Exception as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference")
         return format_error_html(f"Unexpected error: {e}")
 
 
@@ -932,8 +1021,12 @@ def generate_with_lora_streaming(
             yield chunk
 
     except RuntimeError as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference")
         yield format_error_html(f"Generation error: {e}")
     except Exception as e:
+        tb_str = traceback.format_exc()
+        _investigate_inference_error(e, tb_str, "llm_inference")
         yield format_error_html(f"Unexpected error: {e}")
 
 
@@ -1272,7 +1365,7 @@ def create_llm_inference_tab() -> gr.Tab:
     return tab
 
 
-with gr.Blocks(title="Agentic AutoML Platform") as demo:
+with gr.Blocks(title="Agentic AutoML Platform", theme="JohnSmith9982/small_and_pretty") as demo:
     gr.Markdown("# Agentic AutoML Platform")
 
     create_tabular_ml_tab()

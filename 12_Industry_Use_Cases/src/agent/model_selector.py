@@ -9,7 +9,7 @@ class ModelSelector:
     """RAG-based model selection agent."""
 
     def __init__(self):
-        self.inference_url = os.getenv("LLM_INFERENCE_URL", "http://host.docker.internal:8080/v1")
+        self.inference_url = os.getenv("LLM_INFERENCE_URL", "http://192.168.1.185:8080/v1")
         self.inference_key = os.getenv("LLM_INFERENCE_KEY", "not-needed")
         self.client = OpenAI(base_url=self.inference_url, api_key=self.inference_key)
         self.retriever = QdrantRetriever()

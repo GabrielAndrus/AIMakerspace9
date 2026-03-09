@@ -193,6 +193,26 @@ services:
     volumes:
       - qdrant_storage:/qdrant/storage
 
+  metaflow-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    runtime: nvidia
+    ipc: host
+    environment:
+      - METAFLOW_DEFAULT_METADATA=local
+      - USERNAME=docker_user
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./:/workspace
+      - huggingface_cache:/root/.cache/huggingface
+    depends_on:
+      - app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: python -m src.utils.metaflow_dashboard
+
 volumes:
   langfuse_postgres_data:
     driver: local
@@ -204,3 +224,5 @@ volumes:
     driver: local
   qdrant_storage:
   huggingface_cache:
+  metaflow_postgres_data:
+    driver: local

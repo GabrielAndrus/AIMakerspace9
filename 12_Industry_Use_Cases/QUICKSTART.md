@@ -16,13 +16,15 @@ Get up and running with the AI Makerspace platform in minutes.
 Start all services (Qdrant vector DB, Langfuse observability, WebUI):
 
 ```bash
-docker-compose up -d
+docker compose up -d
+docker compose exec app python -m src.app
 ```
 
 Verify services are running:
-- **Qdrant**: http://localhost:6333 (vector database UI)
+- **Qdrant**: http://localhost:6333/dashboard (vector database UI)
 - **Langfuse**: http://localhost:3000 (LLM observability dashboard)
 - **WebUI**: http://localhost:7860
+- **Metaflow Dashboard**: http://localhost:3001
 
 First-time Langfuse setup: Create an account at http://localhost:3000
 
@@ -43,7 +45,7 @@ Index the scikit-learn documentation into Qdrant:
 ```bash
 cd /home/imjonezz/Desktop/AIMakerspace9/12_Industry_Use_Cases
 
-docker-compose exec app python -m src.retrieval.indexer
+docker compose exec app python -m src.retrieval.indexer
 ```
 
 This loads documents from `data/knowledge_base/`, chunks them, generates embeddings, and stores in Qdrant.
@@ -75,19 +77,22 @@ python src/flows/llm_training_flow.py run \
   --method GRPO
 ```
 
-### Viewing Metaflow Run History
+### Viewing Metaflow Runs
 
-Metaflow runs are stored locally with `METAFLOW_DEFAULT_METADATA=local`:
+Use CLI commands to inspect training runs:
 
 ```bash
-# View run history inside container or host
-metaflow status
+# List all runs for a flow
+metaflow list
 
-# Or via docker-compose
-docker-compose exec app metaflow status
+# Show detailed information for a specific run
+metaflow show <run_id>
+
+# Check the status of the latest run
+metaflow status
 ```
 
-Note: The full Metaflow UI requires additional setup (AWS metadata service or local deployment).
+> **Note**: Metaflow UI requires x86_64 architecture. On ARM64 (Apple Silicon), use CLI commands above.
 
 ---
 

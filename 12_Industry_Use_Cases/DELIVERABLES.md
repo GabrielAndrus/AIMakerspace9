@@ -17,7 +17,7 @@ Section 1
 Section 2
 Proposed Solution:
 Agentic AutoML
-This platform uses the scikit learn documentation itself to determine, based on an uploaded dataset (either tabular or text-based) what is the best model to train for predicting, and what method is best for completing that training. There are several piece to this that make it work: QDrant vector store, using Qwen3-embedding-4b to embed our knowledge base for retrieval, minimax-m2.5-mlx@8bit for making the ultimate decision, and the platform of the Spark inside Nvidia's golden pytorch docker container to actually _do_ the training. Once the training is done, we don't have to simply trust that the LLM has done a good job, there is an inference playground for loading the model and checking against whatever golden dataset is required. All of this is, of course, accessible through both the webui as well as a straight API call to the running gradio server.
+This platform uses the scikit learn documentation itself to determine, based on an uploaded dataset (either tabular or text-based) what is the best model to train for predicting, and what method is best for completing that training. There are several piece to this that make it work: QDrant vector store, using Qwen3-embedding-4b to embed our knowledge base for retrieval, a locally-hosted vLLM server (default: Qwen/Qwen2.5-0.5B) for making the ultimate decision, and the platform of the Spark inside Nvidia's golden pytorch docker container to actually _do_ the training. Once the training is done, we don't have to simply trust that the LLM has done a good job, there is an inference playground for loading the model and checking against whatever golden dataset is required. All of this is, of course, accessible through both the webui as well as a straight API call to the running gradio server.
 Infrastructure Diagram:
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -39,18 +39,22 @@ Infrastructure Diagram:
 │  │  2. RAG Retrieval Agent → Queries QDrant for relevant sklearn documentation         │  │
 │  │  3. Model Selection Agent → Uses LLM to recommend best model based on retrieval     │  │
 │  │  4. Training Agent → Executes training pipeline on DGX Spark                        │  │
+│  4. Error Investigation Agent → Multi-agent system for debugging ML/LLM errors   │  │
 │  └─────────────────────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────┬───────────────────────────────────────────────┬─────────────────────┘
                       │                                               │
           ┌───────────▼───────────┐                   ┌───────────────▼────────────────┐
           │   LLM Decision Maker  │                   │    Monitoring & Evaluation     │
           │                       │                   │                                │
-          │  minimax-m2.5-mlx     │                   │    Langfuse                    │
-          │  (8-bit quantized)    │                   │    - Trace model decisions     │
+          │  vLLM-hosted LLM      │                   │    Langfuse                    │
+          │  (default: Qwen2.5)   │                   │    - Trace model decisions     │
           │                       │                   │    - Log evaluation metrics    │
-          │  Chosen for: balance  │                   │    - Audit reasoning steps     │
-          │  of speed & quality   │                   └────────────────────────────────┘
-          └───────────────────────┘
+          │  Chosen for: local    │                   │    - Audit reasoning steps     │
+          │  hosting, no API deps │                   │                                │
+          │                       │                   │    RAGAS                       │
+          └───────────────────────┘                   │    - Faithfulness metrics      │
+                                                      │    - Context precision/recall  │
+                                                      └────────────────────────────────┘
                       │
                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -84,13 +88,13 @@ Infrastructure Diagram:
 ```
 
 Chosen tooling with rationale:
-- **LLM (minimax-m2.5-mlx@8bit)**: Chosen for its open-source nature and balanced speed/quality; 8-bit quantization provides fast inference while preserving model quality for decision-making.
+- **LLM (vLLM-hosted Qwen2.5)**: Chosen for local hosting without external API dependencies; provides fast inference with OpenAI-compatible API for seamless integration.
 - **Agent Orchestration (Custom/LangGraph)**: Chosen to orchestrate the multi-step pipeline from dataset analysis through RAG retrieval to model selection and training execution.
 - **Tools (Python/sklearn)**: Chosen as the foundation since scikit-learn is the core library being wrapped, and Python provides seamless integration across all components.
 - **Embedding Model (Qwen/Qwen3-Embedding-4B)**: Chosen for its open-source availability and 2560-dimensional embeddings that capture rich semantic relationships in sklearn documentation.
 - **Vector Database (QDrant)**: Chosen because it was tested in class, supports local self-hosting, and integrates easily via docker compose for the entire stack.
 - **Monitoring (Langfuse)**: Chosen for data governance and traceability, allowing evaluation of model decisions and auditing the agent's reasoning at each step.
-- **Evaluation Framework (Built-in + Langfuse)**: Chosen to combine built-in inference playground for manual testing with Langfuse traces for automated evaluation.
+- **Evaluation Framework (RAGAS + Langfuse)**: Chosen to combine automated RAG quality metrics (faithfulness, context precision/recall) with Langfuse traces for comprehensive evaluation.
 - **User Interface (Gradio)**: Chosen because of prior experience and its built-in FastAPI integration, providing both web UI and documented REST API simultaneously.
 - **Deployment Tool (Docker)**: Chosen to ensure consistent environments for users and maintainers, with the NVIDIA PyTorch container providing GPU support on DGX Sparks.
 
@@ -111,6 +115,40 @@ Default Chunking strategy:
 It's just RecursiveCharacterTextSplitter chunk_size: int = 500, chunk_overlap: int = 100. I tested several strategies including semantic chunking for this and did not get any performance improvement, likely because of the domain.
 Data Source:
 The data source is Sci-Kit Learn documentation, summarized and evaluated that I've put in the data/knowledge_base folder. I focused on supervised learning and model selection, and will add more later.
+External APIs/Tools for Agent Component:
+The agent component currently uses only the locally-hosted vLLM server (OpenAI-compatible API at http://192.168.1.185:8080/v1) for LLM inference - no external APIs like Tavily search are currently implemented. The agent's tools/capabilities are limited to: (1) dataset file analysis via Python/pandas, (2) format detection for training methods (SFT/DPO/GRPO), and (3) rule-based recommendations when the LLM is unavailable. External search APIs are planned but not yet implemented.
 
 Section 4
 Done =)
+
+Section 5
+RAGAS Evaluation Results:
+*Results will be added after running the RAGAS evaluation pipeline. The `src/evaluation/ragas_evaluator.py` is configured to measure:*
+- **Faithfulness**: Whether generated answers are grounded in retrieved context
+- **Context Precision**: Relevance of retrieved documents to the question
+- **Context Recall**: Coverage of ground truth in retrieved context
+
+*Run evaluation with: `python -m src.evaluation.ragas_evaluator --compare` to compare Dense vs Hybrid retrieval methods.*
+
+Section 6
+Advanced Retrieval:
+Hybrid Retrieval (BM25 + Dense with Reciprocal Rank Fusion) is implemented in `src/retrieval/hybrid_retriever.py`. This approach improves RAG accuracy for technical documentation queries by combining semantic understanding (dense retrieval) with exact keyword matching (BM25), which is particularly valuable for sklearn's domain-specific terminology and configuration parameters. The hybrid method is available in the UI alongside pure dense retrieval.
+
+Section 7
+Next Steps:
+For Demo Day, I plan to keep Dense retrieval as the default and offer Hybrid as an advanced option. While Hybrid retrieval theoretically provides better accuracy by combining semantic and keyword matching, Dense retrieval is faster and simpler to explain. The comparison results from RAGAS evaluation will inform whether Hybrid should become the recommended default after Demo Day.
+
+Section 8
+Deep Error Investigation Agent:
+The platform includes a multi-agent LangGraph system for debugging ML/LLM training and inference errors. When errors occur during training or inference, the system:
+1. Analyzes the error context (error type, message, traceback, task type, model info)
+2. Uses a multi-agent workflow: query generation → search → quality analysis → doc fetch → recommendation synthesis
+3. Learns from past investigations using Qdrant semantic memory
+4. Automatically refines search queries if initial results are poor
+5. Provides hardware-specific recommendations (CUDA 13.1, DGX Spark)
+
+Key components:
+- `src/agent/investigation_graph.py` - LangGraph StateGraph orchestration
+- `src/agent/sub_agents/` - Specialized agent nodes
+- `src/agent/investigation_memory.py` - Qdrant-backed semantic memory
+- `src/agent/investigation_planner.py` - Planning and iteration logic
