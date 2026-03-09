@@ -1,0 +1,673 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.20.4",
+    "script_metadata_hash": null
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "793b3c7dd2fd43ba1d81d558e6c12bfe",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"session-14-mcp-powered-x-post-summarizer\">Session 14: MCP-Powered X Post Summarizer</h1>\n<h2 id=\"building-a-langgraph-agent-with-github-mcp-tools-x-api-tools-and-memory\">Building a LangGraph Agent with GitHub MCP Tools, X API Tools, and Memory</h2>\n<h2 id=\"learning-objectives\">Learning Objectives:</h2>\n<ul>\n<li><strong>Ingest MCP servers as LangGraph tools</strong> using <code>langchain-mcp-adapters</code> to connect to the GitHub MCP Server and use its tools programmatically</li>\n<li><strong>Wrap the X (Twitter) API as a LangChain tool</strong> using the <code>@tool</code> decorator so a LangGraph agent can search and retrieve public posts</li>\n<li><strong>Build a LangGraph agent with memory</strong> that combines MCP-sourced tools and custom tools, using <code>MemorySaver</code> for short-term conversational memory</li>\n<li><strong>Orchestrate a full workflow through the agent</strong> \u2014 search X posts, generate summaries, create a GitHub repo, commit files, branch, and open a PR \u2014 all via natural language</li>\n</ul>\n<h2 id=\"overview\">Overview</h2>\n<span class=\"paragraph\">In this notebook, you will build a <strong>LangGraph ReAct agent</strong> that has access to two categories of tools:</span>\n<ol>\n<li><strong>GitHub MCP tools</strong> \u2014 loaded from the official GitHub MCP Server via <code>langchain-mcp-adapters</code>. These replace manual <code>git</code> commands with tool calls the agent can invoke (create repos, commit files, create branches, open PRs).</li>\n<li><strong>X API tools</strong> \u2014 custom Python functions wrapped with the <code>@tool</code> decorator that call the X API v2 directly to search and retrieve posts.</li>\n</ol>\n<span class=\"paragraph\">The agent uses <strong><code>MemorySaver</code></strong> for short-term memory so it can maintain context across multi-step workflows within a conversation thread.</span>\n<span class=\"paragraph\">There will be one breakout room with two phases:</span>\n<ul>\n<li>\n<span class=\"paragraph\">\ud83e\udd1d Phase 1: Setup, Tools &amp; Agent Construction</span>\n<ul>\n<li>Task 1: Dependencies &amp; Environment</li>\n<li>Task 2: X API as LangChain Tools</li>\n<li>Task 3: Connect to GitHub MCP Server &amp; Load Tools</li>\n<li>Task 4: Build the LangGraph Agent with Memory</li>\n<li>Task 5: Test the Agent \u2014 Search &amp; Summarize X Posts</li>\n<li>Activity #1: Extend the Agent with a Custom X API Tool</li>\n</ul>\n</li>\n<li>\n<span class=\"paragraph\">\ud83e\udd1d Phase 2: MCP Workflow Through the Agent</span>\n<ul>\n<li>Task 6: Create a GitHub Repository</li>\n<li>Task 7: Commit the Summary</li>\n<li>Task 8: Create a Feature Branch &amp; Add Metadata</li>\n<li>Task 9: Open a Pull Request</li>\n<li>Task 10: Commit the X API Script</li>\n<li>Task 11: Update the README</li>\n<li>Activity #1: Multi-Account Comparison Pipeline</li>\n</ul>\n</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "7e9fcf3e4a265661f1b326d5fe6bcd45",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h1 id=\"breakout-room\">\ud83e\udd1d Breakout Room</h1>\n<h2 id=\"setup-tools-agent-construction\">Setup, Tools &amp; Agent Construction</h2></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "c4fce0be2345568a2b212b2150d43815",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-1-dependencies-environment\">Task 1: Dependencies &amp; Environment</h2>\n<span class=\"paragraph\">We need:</span>\n<ul>\n<li><code>langchain-mcp-adapters</code> to connect to MCP servers and convert their tools into LangChain tools</li>\n<li><code>langgraph</code> for our agent graph with memory</li>\n<li><code>langchain-openai</code> for our LLM</li>\n<li><code>requests</code> for the X API calls</li>\n<li><code>nest-asyncio</code> for async MCP operations inside Jupyter</li>\n</ul>\n<blockquote>\n<span class=\"paragraph\">NOTE: Create a <code>.env</code> file in this directory with <code>X_BEARER_TOKEN</code>, <code>OPENAI_API_KEY</code>, and <code>GITHUB_PAT</code> before running.</span>\n<span class=\"paragraph\">Setup references:\n- GitHub fine-grained PAT guide: <a href=\"https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token\" rel=\"noopener noreferrer\" target=\"_blank\">Creating a personal access token</a>\n- X API Bearer Token setup: <a href=\"https://developer.x.com/en/portal/dashboard\" rel=\"noopener noreferrer\" target=\"_blank\">X Developer Portal</a> and <a href=\"https://developer.x.com/en/products/twitter-api\" rel=\"noopener noreferrer\" target=\"_blank\">X API access tiers</a></span>\n</blockquote></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "31c1ef794b8e4f8f9b761dd8a3ffdf18",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"getting-your-credentials\">Getting Your Credentials</h3>\n<span class=\"paragraph\"><strong>GitHub PAT (fine-grained):</strong></span>\n<ol>\n<li>Open <a href=\"https://github.com/settings/personal-access-tokens/new\" rel=\"noopener noreferrer\" target=\"_blank\">GitHub Personal Access Tokens (fine-grained)</a>.</li>\n<li>Follow <a href=\"https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token\" rel=\"noopener noreferrer\" target=\"_blank\">GitHub's PAT setup guide</a>.</li>\n<li>\n<span class=\"paragraph\">Set repository permissions to at least:</span>\n<ul>\n<li><code>Contents</code>: Read and write</li>\n<li><code>Pull requests</code>: Read and write</li>\n<li><code>Metadata</code>: Read-only</li>\n</ul>\n</li>\n</ol>\n<span class=\"paragraph\"><strong>X Bearer Token:</strong></span>\n<ol>\n<li>Open the <a href=\"https://developer.x.com/en/portal/dashboard\" rel=\"noopener noreferrer\" target=\"_blank\">X Developer Portal</a>.</li>\n<li>Create/select a Project + App, then go to <strong>Keys and Tokens</strong> to generate a Bearer Token.</li>\n<li>Confirm your plan supports the recent search endpoint (<code>GET /2/tweets/search/recent</code>) from the <a href=\"https://developer.x.com/en/products/twitter-api\" rel=\"noopener noreferrer\" target=\"_blank\">X API product page</a>.</li>\n</ol></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "c408fa28dd3bef2442758cef5baf7b4d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-2-x-api-as-langchain-tools\">Task 2: X API as LangChain Tools</h2>\n<span class=\"paragraph\">Instead of relying on a community-built MCP server for X, we'll call the <strong>X API v2</strong> directly and wrap our functions with the <code>@tool</code> decorator. This makes them available to our LangGraph agent as callable tools \u2014 just like the MCP tools will be.</span>\n<span class=\"paragraph\">This is a key architectural decision: <strong>not everything needs to be an MCP server</strong>. Wrapping a simple API call as a <code>@tool</code> is often simpler and more transparent.</span>\n<span class=\"paragraph\"><strong>\ud83d\udcda Documentation:</strong></span>\n<ul>\n<li><a href=\"https://python.langchain.com/docs/concepts/tools/\" rel=\"noopener noreferrer\" target=\"_blank\">LangChain Tools Conceptual Guide</a></li>\n<li><a href=\"https://developer.x.com/en/docs/x-api\" rel=\"noopener noreferrer\" target=\"_blank\">X API v2 Documentation</a></li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "3de40d42af933570791595af1f239d07",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let's verify our X API tools work before wiring them into the agent:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "03672daaf07968af6c23c8e920878c26",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-3-connect-to-github-mcp-server-load-tools\">Task 3: Connect to GitHub MCP Server &amp; Load Tools</h2>\n<span class=\"paragraph\">Now we'll connect to the <strong>GitHub MCP Server</strong> \u2014 an official, GitHub-maintained MCP server that gives agents the ability to manage repositories, issues, pull requests, and more.</span>\n<span class=\"paragraph\">We use <code>langchain-mcp-adapters</code> to:</span>\n<ol>\n<li>Connect to the remote GitHub MCP server over HTTP</li>\n<li>Automatically convert all MCP tools into LangChain-compatible tools</li>\n</ol>\n<span class=\"paragraph\">This is the key MCP integration point \u2014 instead of writing custom GitHub API wrappers, we get a full set of tools for free just by connecting to the MCP server.</span>\n<span class=\"paragraph\"><strong>\ud83d\udcda Documentation:</strong></span>\n<ul>\n<li><a href=\"https://github.com/langchain-ai/langchain-mcp-adapters\" rel=\"noopener noreferrer\" target=\"_blank\">langchain-mcp-adapters</a></li>\n<li><a href=\"https://github.com/github/github-mcp-server\" rel=\"noopener noreferrer\" target=\"_blank\">GitHub MCP Server</a></li>\n<li><a href=\"https://modelcontextprotocol.io/\" rel=\"noopener noreferrer\" target=\"_blank\">Model Context Protocol Specification</a></li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "36390c477ade09250ba77765cf103566",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"key-github-mcp-tools\">Key GitHub MCP Tools</h3>\n<span class=\"paragraph\">The MCP server exposes many tools, but the key ones we'll use are:</span>\n<table>\n<thead>\n<tr>\n<th>MCP Tool</th>\n<th>Replaces (Git CLI)</th>\n<th>What It Does</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code>create_repository</code></td>\n<td><code>git init</code> + GitHub UI</td>\n<td>Creates a new repo on your account</td>\n</tr>\n<tr>\n<td><code>create_or_update_file</code></td>\n<td><code>git add</code> + <code>git commit</code> + <code>git push</code></td>\n<td>Commits a file directly to a branch</td>\n</tr>\n<tr>\n<td><code>create_branch</code></td>\n<td><code>git checkout -b</code></td>\n<td>Creates a new branch</td>\n</tr>\n<tr>\n<td><code>create_pull_request</code></td>\n<td><code>gh pr create</code></td>\n<td>Opens a PR from one branch to another</td>\n</tr>\n<tr>\n<td><code>search_repositories</code></td>\n<td><code>gh repo list</code></td>\n<td>Searches across your repos</td>\n</tr>\n<tr>\n<td><code>get_file_contents</code></td>\n<td><code>git show</code> / <code>cat</code></td>\n<td>Reads a file from a repo</td>\n</tr>\n<tr>\n<td><code>list_commits</code></td>\n<td><code>git log</code></td>\n<td>Shows commit history</td>\n</tr>\n</tbody>\n</table></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "ecae626d816f1ac7cf3b514be4968ca4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-4-build-the-langgraph-agent-with-memory\">Task 4: Build the LangGraph Agent with Memory</h2>\n<span class=\"paragraph\">Now we combine <strong>both tool sets</strong> into a single LangGraph agent:</span>\n<ul>\n<li><strong>X API tools</strong> \u2014 custom <code>@tool</code> functions for searching posts</li>\n<li><strong>GitHub MCP tools</strong> \u2014 loaded from the MCP server via <code>langchain-mcp-adapters</code></li>\n</ul>\n<span class=\"paragraph\">We add <strong><code>MemorySaver</code></strong> for short-term memory so the agent remembers context across the multi-step workflow (e.g., it fetches posts in one turn, summarizes them in the next, and commits the summary in a third).</span>\n<span class=\"paragraph\">The architecture follows the standard LangGraph ReAct pattern from Sessions 4-6:</span>\n<div class=\"language-gdscript codehilite\"><pre><span></span><code><span class=\"err\">\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</span><span class=\"w\">     </span><span class=\"err\">\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</span>\n<span class=\"err\">\u2502</span><span class=\"w\">  </span><span class=\"n\">START</span><span class=\"w\">   </span><span class=\"err\">\u2502\u2500\u2500\u2500\u2500\u25b6\u2502</span><span class=\"w\">   </span><span class=\"n\">Agent</span><span class=\"w\">   </span><span class=\"err\">\u2502\u25c0\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</span>\n<span class=\"err\">\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518</span><span class=\"w\">     </span><span class=\"err\">\u2502</span><span class=\"w\">  </span><span class=\"p\">(</span><span class=\"n\">LLM</span><span class=\"w\"> </span><span class=\"o\">+</span><span class=\"w\">   </span><span class=\"err\">\u2502</span><span class=\"w\">               </span><span class=\"err\">\u2502</span>\n<span class=\"w\">                </span><span class=\"err\">\u2502</span><span class=\"w\">   </span><span class=\"n\">tools</span><span class=\"p\">)</span><span class=\"w\">  </span><span class=\"err\">\u2502</span><span class=\"w\">               </span><span class=\"err\">\u2502</span>\n<span class=\"w\">                </span><span class=\"err\">\u2514\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2518</span><span class=\"w\">               </span><span class=\"err\">\u2502</span>\n<span class=\"w\">                      </span><span class=\"err\">\u2502</span><span class=\"w\">                     </span><span class=\"err\">\u2502</span>\n<span class=\"w\">               </span><span class=\"n\">has</span><span class=\"w\"> </span><span class=\"k\">tool</span><span class=\"w\"> </span><span class=\"n\">calls</span><span class=\"err\">?</span><span class=\"w\">              </span><span class=\"err\">\u2502</span>\n<span class=\"w\">                </span><span class=\"o\">/</span><span class=\"w\">           </span>\\<span class=\"w\">               </span><span class=\"err\">\u2502</span>\n<span class=\"w\">              </span><span class=\"n\">yes</span><span class=\"w\">            </span><span class=\"n\">no</span><span class=\"w\">             </span><span class=\"err\">\u2502</span>\n<span class=\"w\">              </span><span class=\"o\">/</span><span class=\"w\">               </span>\\<span class=\"w\">             </span><span class=\"err\">\u2502</span>\n<span class=\"w\">    </span><span class=\"err\">\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</span><span class=\"w\">     </span><span class=\"err\">\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510</span><span class=\"w\">        </span><span class=\"err\">\u2502</span>\n<span class=\"w\">    </span><span class=\"err\">\u2502</span><span class=\"w\">  </span><span class=\"n\">Tool</span><span class=\"w\"> </span><span class=\"n\">Node</span><span class=\"w\">  </span><span class=\"err\">\u2502</span><span class=\"w\">     </span><span class=\"err\">\u2502</span><span class=\"w\">   </span><span class=\"n\">END</span><span class=\"w\">   </span><span class=\"err\">\u2502</span><span class=\"w\">        </span><span class=\"err\">\u2502</span>\n<span class=\"w\">    </span><span class=\"err\">\u2502</span><span class=\"w\"> </span><span class=\"p\">(</span><span class=\"n\">X</span><span class=\"w\"> </span><span class=\"n\">API</span><span class=\"w\"> </span><span class=\"o\">+</span><span class=\"w\">    </span><span class=\"err\">\u2502</span><span class=\"w\">     </span><span class=\"err\">\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518</span><span class=\"w\">        </span><span class=\"err\">\u2502</span>\n<span class=\"w\">    </span><span class=\"err\">\u2502</span><span class=\"w\">  </span><span class=\"n\">GitHub</span><span class=\"w\"> </span><span class=\"n\">MCP</span><span class=\"p\">)</span><span class=\"err\">\u2502\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518</span>\n<span class=\"w\">    </span><span class=\"err\">\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518</span>\n</code></pre></div>\n<span class=\"paragraph\"><strong>\ud83d\udcda Documentation:</strong></span>\n<ul>\n<li><a href=\"https://langchain-ai.github.io/langgraph/tutorials/introduction/\" rel=\"noopener noreferrer\" target=\"_blank\">LangGraph ReAct Agent</a></li>\n<li><a href=\"https://langchain-ai.github.io/langgraph/concepts/persistence/\" rel=\"noopener noreferrer\" target=\"_blank\">MemorySaver (Checkpointing)</a></li>\n<li><a href=\"https://langchain-ai.github.io/langgraph/reference/prebuilt/#langgraph.prebuilt.tool_node.ToolNode\" rel=\"noopener noreferrer\" target=\"_blank\">ToolNode Prebuilt</a></li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "6c2965c32875bcfdb68f79062ccd7754",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Let's visualize the graph to confirm our architecture:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "61a58029b216d7b974c8ce8d2237fafd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"helper-function-for-running-the-agent\">Helper function for running the agent</h3>\n<span class=\"paragraph\">We'll use a single <code>thread_id</code> throughout the notebook so the agent remembers previous interactions (short-term memory via the checkpointer).</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "d89b51f9b7189fc66097a8e269ef7a57",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-5-test-the-agent-search-summarize-x-posts\">Task 5: Test the Agent \u2014 Search &amp; Summarize X Posts</h2>\n<span class=\"paragraph\">Let's put the agent through its paces. First, we'll ask it to search for posts and generate a summary. Because we're using <code>MemorySaver</code> with a consistent <code>thread_id</code>, the agent will remember the posts it found when we ask it to summarize them.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "453b218c0ccef432852ff22e6487912f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><span class=\"paragraph\">Save the summary locally for reference:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "0df1f2bc7b302f52634c3ea13d464b2f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"question-1\">\u2753 Question #1:</h3>\n<h5 id=\"answer\">Answer:</h5>\n<span class=\"paragraph\"><em>Your answer here</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "b69a80ee2784d236799272af8ec43ae7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"activity-1\">\ud83c\udfd7\ufe0f Activity #1:</h3>\n<span class=\"paragraph\">Your task is to extend the agent with a <strong>new custom X API tool</strong> and verify it works end-to-end.</span>\n<ol>\n<li>\n<span class=\"paragraph\"><strong>Create a new <code>@tool</code> function</strong> called <code>get_user_profile</code> that retrieves a user's public profile information using the X API v2 <a href=\"https://developer.x.com/en/docs/x-api/users/lookup/api-reference/get-users-by-username-username\" rel=\"noopener noreferrer\" target=\"_blank\"><code>GET /2/users/by/username/:username</code></a> endpoint. It should return:</span>\n<ul>\n<li>Display name</li>\n<li>Bio / description</li>\n<li>Follower count</li>\n<li>Following count</li>\n<li>Post count</li>\n<li>Account creation date</li>\n</ul>\n</li>\n<li><strong>Rebuild the agent</strong> with the updated tool set \u2014 add your new tool to <code>x_api_tools</code>, re-combine with the MCP tools, re-bind tools to the LLM, and recompile the graph</li>\n<li>\n<span class=\"paragraph\"><strong>Test it</strong> by asking the agent to:</span>\n<ul>\n<li>Retrieve the profile of an AI thought leader of your choice</li>\n<li>Compare that profile with the posts you already retrieved in Task 5 \u2014 does the bio match the posting themes?</li>\n</ul>\n</li>\n</ol>\n<blockquote>\n<span class=\"paragraph\">HINT: The X API v2 user lookup endpoint uses the same Bearer Token authentication. You'll need <code>user.fields=description,public_metrics,created_at</code> in your request params.</span>\n</blockquote></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "d3e1b9f0d7add72027cfbd7a7c59539d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><hr />\n<h2 id=\"phase-2-mcp-workflow-through-the-agent\">Phase 2: MCP Workflow Through the Agent</h2>\n<span class=\"paragraph\">Now we'll use the same agent to perform all GitHub repository operations through the <strong>GitHub MCP tools</strong>. Because the agent has memory, it already knows the summary it generated in Phase 1.</span>\n<span class=\"paragraph\">Each task below sends a natural language instruction to the agent. The agent decides which GitHub MCP tool(s) to call to fulfill the request.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "8fa34e99744de499ca041e9e43dfb663",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-6-create-a-new-repository\">Task 6: Create a New Repository</h2>\n<span class=\"paragraph\">The agent will use the <code>create_repository</code> MCP tool to create a new repo on your GitHub account.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "4b04f34433ad25428672a32e90266a8a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-7-commit-the-summary-to-your-repo\">Task 7: Commit the Summary to Your Repo</h2>\n<span class=\"paragraph\">The agent remembers the summary it generated earlier (short-term memory) and can commit it directly.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "25a677addf097b5a1a277a0ae7b5c7dc",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-8-create-a-feature-branch-and-add-metadata\">Task 8: Create a Feature Branch and Add Metadata</h2>\n<span class=\"paragraph\">The agent will use <code>create_branch</code> and <code>create_or_update_file</code> MCP tools.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "kqZH",
+      "code_hash": "aaecde1e32d42464dd0bbd447479bdba",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-9-open-a-pull-request\">Task 9: Open a Pull Request</h2>\n<span class=\"paragraph\">The agent will use the <code>create_pull_request</code> MCP tool.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "rEll",
+      "code_hash": "18d894cdfe731e1d870f15f843c88171",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-10-commit-the-x-api-script\">Task 10: Commit the X API Script</h2>\n<span class=\"paragraph\">We'll ask the agent to commit a clean version of the X search script \u2014 reading credentials from environment variables, no hardcoded keys.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SdmI",
+      "code_hash": "02090e3d5f7a42e4e9c3fa134809a52f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"task-11-update-the-readme\">Task 11: Update the README</h2>\n<span class=\"paragraph\">The agent already knows everything about the project from its conversation memory \u2014 what account was analyzed, how the project was built, etc.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "yOPj",
+      "code_hash": "64febe9a694eac64d04f30da96da6e9c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"question-2\">\u2753 Question #2:</h3>\n<span class=\"paragraph\">Compare using GitHub MCP tools (through a LangGraph agent) to traditional <code>git</code> commands. What felt easier? What felt harder or less transparent?</span>\n<h5 id=\"answer\">Answer:</h5>\n<span class=\"paragraph\"><em>Your answer here</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "fwwy",
+      "code_hash": "3e71cb8382d621311b2f225deb37f315",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"question-3\">\u2753 Question #3:</h3>\n<span class=\"paragraph\">You used MCP for GitHub but wrapped the X API as a <code>@tool</code> directly. What are the tradeoffs of consuming an API through an MCP server versus wrapping it as a LangChain tool? When would each approach make more sense?</span>\n<h5 id=\"answer\">Answer:</h5>\n<span class=\"paragraph\"><em>Your answer here</em></span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "LJZf",
+      "code_hash": "175279f785167436215d972d90624686",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"activity-1\">\ud83c\udfd7\ufe0f Activity #1:</h3>\n<span class=\"paragraph\">Your task is to extend the MCP workflow by building a <strong>Multi-Account Comparison Pipeline</strong> through the agent.</span>\n<span class=\"paragraph\">You are expected to:</span>\n<ol>\n<li><strong>Retrieve posts from a second X account</strong> \u2014 choose another public figure or thought leader in a related field</li>\n<li>\n<span class=\"paragraph\"><strong>Generate a structured comparison</strong> by asking the agent to create a <code>comparison.md</code> file that includes:</span>\n<ul>\n<li>Side-by-side topic analysis for both accounts</li>\n<li>Tone and sentiment differences</li>\n<li>Posting frequency comparison</li>\n<li>Top 3 most notable posts from each account</li>\n<li>A brief conclusion about each account's focus area</li>\n</ul>\n</li>\n<li>\n<span class=\"paragraph\"><strong>Commit through the MCP workflow</strong>:</span>\n<ul>\n<li>Create a new branch called <code>add-comparison</code> in your <code>x-post-summarizer-2026</code> repo</li>\n<li>Commit <code>comparison.md</code> to that branch</li>\n<li>Open a pull request to merge it into <code>main</code></li>\n</ul>\n</li>\n</ol>\n<blockquote>\n<span class=\"paragraph\">NOTE: The agent already has memory of the first account's posts from Phase 1. You only need to fetch posts from the second account \u2014 the agent will use its memory for the rest.</span>\n</blockquote></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "0443abfff9342841f060927bb7de9df0",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Enter your X Bearer Token: sadf\n",
+          "mimetype": "text/password"
+        },
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Enter your OpenAI API Key: asdf\n",
+          "mimetype": "text/password"
+        },
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Enter your GitHub PAT: asdf\n",
+          "mimetype": "text/password"
+        }
+      ]
+    },
+    {
+      "id": "PKri",
+      "code_hash": "cf83b287e9ec04728d71e2390170730c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "bf9601f032d348216953fb5b20e7cc50",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "Error code: 401 - {'error': {'message': 'Incorrect API key provided: asdf. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'param': None, 'code': 'invalid_api_key'}}",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/_api/deprecation.py:25: UserWarning: Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater.\n  from pydantic.v1.fields import FieldInfo as FieldInfoV1\n",
+          "mimetype": "text/plain"
+        },
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3204410/__marimo__cell_SFPL_.py&quot;</span>, line <span class=\"m\">6</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">response</span> <span class=\"o\">=</span> <span class=\"n\">llm</span><span class=\"o\">.</span><span class=\"n\">invoke</span><span class=\"p\">(</span><span class=\"s2\">&quot;Say &#39;MCP agent ready!&#39; in exactly those words.&quot;</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/language_models/chat_models.py&quot;</span>, line <span class=\"m\">402</span>, in <span class=\"n\">invoke</span>\n<span class=\"w\">    </span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">generate_prompt</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"p\">[</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_convert_input</span><span class=\"p\">(</span><span class=\"nb\">input</span><span class=\"p\">)],</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">6</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span><span class=\"o\">.</span><span class=\"n\">generations</span><span class=\"p\">[</span><span class=\"mi\">0</span><span class=\"p\">][</span><span class=\"mi\">0</span><span class=\"p\">],</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/language_models/chat_models.py&quot;</span>, line <span class=\"m\">1123</span>, in <span class=\"n\">generate_prompt</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">generate</span><span class=\"p\">(</span><span class=\"n\">prompt_messages</span><span class=\"p\">,</span> <span class=\"n\">stop</span><span class=\"o\">=</span><span class=\"n\">stop</span><span class=\"p\">,</span> <span class=\"n\">callbacks</span><span class=\"o\">=</span><span class=\"n\">callbacks</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/language_models/chat_models.py&quot;</span>, line <span class=\"m\">933</span>, in <span class=\"n\">generate</span>\n<span class=\"w\">    </span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_generate_with_cache</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">m</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">2</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/language_models/chat_models.py&quot;</span>, line <span class=\"m\">1235</span>, in <span class=\"n\">_generate_with_cache</span>\n<span class=\"w\">    </span><span class=\"n\">result</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_generate</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"n\">messages</span><span class=\"p\">,</span> <span class=\"n\">stop</span><span class=\"o\">=</span><span class=\"n\">stop</span><span class=\"p\">,</span> <span class=\"n\">run_manager</span><span class=\"o\">=</span><span class=\"n\">run_manager</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_openai/chat_models/base.py&quot;</span>, line <span class=\"m\">1473</span>, in <span class=\"n\">_generate</span>\n<span class=\"w\">    </span><span class=\"n\">_handle_openai_api_error</span><span class=\"p\">(</span><span class=\"n\">e</span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_openai/chat_models/base.py&quot;</span>, line <span class=\"m\">1468</span>, in <span class=\"n\">_generate</span>\n<span class=\"w\">    </span><span class=\"n\">raw_response</span> <span class=\"o\">=</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">client</span><span class=\"o\">.</span><span class=\"n\">with_raw_response</span><span class=\"o\">.</span><span class=\"n\">create</span><span class=\"p\">(</span><span class=\"o\">**</span><span class=\"n\">payload</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/openai/_legacy_response.py&quot;</span>, line <span class=\"m\">367</span>, in <span class=\"n\">wrapped</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">cast</span><span class=\"p\">(</span><span class=\"n\">LegacyAPIResponse</span><span class=\"p\">[</span><span class=\"n\">R</span><span class=\"p\">],</span> <span class=\"n\">func</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">))</span>\n<span class=\"w\">                                      </span><span class=\"pm\">~~~~^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/openai/_utils/_utils.py&quot;</span>, line <span class=\"m\">286</span>, in <span class=\"n\">wrapper</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">func</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/openai/resources/chat/completions/completions.py&quot;</span>, line <span class=\"m\">1211</span>, in <span class=\"n\">create</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_post</span><span class=\"p\">(</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"s2\">&quot;/chat/completions&quot;</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">47</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"n\">stream_cls</span><span class=\"o\">=</span><span class=\"n\">Stream</span><span class=\"p\">[</span><span class=\"n\">ChatCompletionChunk</span><span class=\"p\">],</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/openai/_base_client.py&quot;</span>, line <span class=\"m\">1297</span>, in <span class=\"n\">post</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">cast</span><span class=\"p\">(</span><span class=\"n\">ResponseT</span><span class=\"p\">,</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">request</span><span class=\"p\">(</span><span class=\"n\">cast_to</span><span class=\"p\">,</span> <span class=\"n\">opts</span><span class=\"p\">,</span> <span class=\"n\">stream</span><span class=\"o\">=</span><span class=\"n\">stream</span><span class=\"p\">,</span> <span class=\"n\">stream_cls</span><span class=\"o\">=</span><span class=\"n\">stream_cls</span><span class=\"p\">))</span>\n<span class=\"w\">                           </span><span class=\"pm\">~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/openai/_base_client.py&quot;</span>, line <span class=\"m\">1070</span>, in <span class=\"n\">request</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_make_status_error_from_response</span><span class=\"p\">(</span><span class=\"n\">err</span><span class=\"o\">.</span><span class=\"n\">response</span><span class=\"p\">)</span> <span class=\"kn\">from</span><span class=\"w\"> </span><span class=\"kc\">None</span>\n<span class=\"gr\">openai.AuthenticationError</span>: <span class=\"n\">Error code: 401 - {&#39;error&#39;: {&#39;message&#39;: &#39;Incorrect API key provided: asdf. You can find your API key at https://platform.openai.com/account/api-keys.&#39;, &#39;type&#39;: &#39;invalid_request_error&#39;, &#39;param&#39;: None, &#39;code&#39;: &#39;invalid_api_key&#39;}}</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "a05a656d55f5f80157f2b3306dd30423",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stdout",
+          "text": "Created 2 X API tools: ['search_recent_posts', 'get_user_posts']\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "emfo",
+      "code_hash": "ccf86c0a01f42fb612955159ad21667f",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "401 Client Error: Unauthorized for url: https://api.x.com/2/tweets/search/recent?query=from%3Allm_wizard+-is%3Aretweet&max_results=10&tweet.fields=created_at%2Cpublic_metrics%2Cauthor_id%2Ctext&expansions=author_id&user.fields=name%2Cusername",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3204410/__marimo__cell_emfo_.py&quot;</span>, line <span class=\"m\">2</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">_result</span> <span class=\"o\">=</span> <span class=\"n\">get_user_posts</span><span class=\"o\">.</span><span class=\"n\">invoke</span><span class=\"p\">({</span><span class=\"s1\">&#39;username&#39;</span><span class=\"p\">:</span> <span class=\"s1\">&#39;llm_wizard&#39;</span><span class=\"p\">,</span> <span class=\"s1\">&#39;max_results&#39;</span><span class=\"p\">:</span> <span class=\"mi\">10</span><span class=\"p\">})</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">642</span>, in <span class=\"n\">invoke</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">run</span><span class=\"p\">(</span><span class=\"n\">tool_input</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">1001</span>, in <span class=\"n\">run</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">error_to_raise</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">967</span>, in <span class=\"n\">run</span>\n<span class=\"w\">    </span><span class=\"n\">response</span> <span class=\"o\">=</span> <span class=\"n\">context</span><span class=\"o\">.</span><span class=\"n\">run</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_run</span><span class=\"p\">,</span> <span class=\"o\">*</span><span class=\"n\">tool_args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">tool_kwargs</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/structured.py&quot;</span>, line <span class=\"m\">97</span>, in <span class=\"n\">_run</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">func</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3204410/__marimo__cell_RGSE_.py&quot;</span>, line <span class=\"m\">58</span>, in <span class=\"n\">get_user_posts</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">search_recent_posts</span><span class=\"o\">.</span><span class=\"n\">invoke</span><span class=\"p\">({</span><span class=\"s2\">&quot;query&quot;</span><span class=\"p\">:</span> <span class=\"n\">query</span><span class=\"p\">,</span> <span class=\"s2\">&quot;max_results&quot;</span><span class=\"p\">:</span> <span class=\"n\">max_results</span><span class=\"p\">})</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">642</span>, in <span class=\"n\">invoke</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">run</span><span class=\"p\">(</span><span class=\"n\">tool_input</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">1001</span>, in <span class=\"n\">run</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">error_to_raise</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/base.py&quot;</span>, line <span class=\"m\">967</span>, in <span class=\"n\">run</span>\n<span class=\"w\">    </span><span class=\"n\">response</span> <span class=\"o\">=</span> <span class=\"n\">context</span><span class=\"o\">.</span><span class=\"n\">run</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_run</span><span class=\"p\">,</span> <span class=\"o\">*</span><span class=\"n\">tool_args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">tool_kwargs</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_core/tools/structured.py&quot;</span>, line <span class=\"m\">97</span>, in <span class=\"n\">_run</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">func</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">args</span><span class=\"p\">,</span> <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3204410/__marimo__cell_RGSE_.py&quot;</span>, line <span class=\"m\">29</span>, in <span class=\"n\">search_recent_posts</span>\n<span class=\"w\">    </span><span class=\"n\">response</span><span class=\"o\">.</span><span class=\"n\">raise_for_status</span><span class=\"p\">()</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/requests/models.py&quot;</span>, line <span class=\"m\">1026</span>, in <span class=\"n\">raise_for_status</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">HTTPError</span><span class=\"p\">(</span><span class=\"n\">http_error_msg</span><span class=\"p\">,</span> <span class=\"n\">response</span><span class=\"o\">=</span><span class=\"bp\">self</span><span class=\"p\">)</span>\n<span class=\"gr\">requests.exceptions.HTTPError</span>: <span class=\"n\">401 Client Error: Unauthorized for url: https://api.x.com/2/tweets/search/recent?query=from%3Allm_wizard+-is%3Aretweet&amp;max_results=10&amp;tweet.fields=created_at%2Cpublic_metrics%2Cauthor_id%2Ctext&amp;expansions=author_id&amp;user.fields=name%2Cusername</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "3b11949f5a46b490a41b879d0d261d92",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "unknown async library, or not in async context",
+          "traceback": []
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "<span class=\"codehilite\"><div class=\"highlight\"><pre><span></span><span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/mcp/client/streamable_http.py&quot;</span>, line <span class=\"m\">717</span>, in <span class=\"n\">streamablehttp_client</span>\n<span class=\"w\">    </span><span class=\"k\">async</span> <span class=\"k\">with</span> <span class=\"n\">streamable_http_client</span><span class=\"p\">(</span>\n<span class=\"w\">               </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">url</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^</span>\n<span class=\"w\">    </span>    <span class=\"n\">http_client</span><span class=\"o\">=</span><span class=\"n\">client</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span>    <span class=\"n\">terminate_on_close</span><span class=\"o\">=</span><span class=\"n\">terminate_on_close</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span> <span class=\"k\">as</span> <span class=\"n\">streams</span><span class=\"p\">:</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/contextlib.py&quot;</span>, line <span class=\"m\">214</span>, in <span class=\"n\">__aenter__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"k\">await</span> <span class=\"n\">anext</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">gen</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/mcp/client/streamable_http.py&quot;</span>, line <span class=\"m\">647</span>, in <span class=\"n\">streamable_http_client</span>\n<span class=\"w\">    </span><span class=\"k\">async</span> <span class=\"k\">with</span> <span class=\"n\">anyio</span><span class=\"o\">.</span><span class=\"n\">create_task_group</span><span class=\"p\">()</span> <span class=\"k\">as</span> <span class=\"n\">tg</span><span class=\"p\">:</span>\n<span class=\"w\">               </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/anyio/_core/_tasks.py&quot;</span>, line <span class=\"m\">173</span>, in <span class=\"n\">create_task_group</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"n\">get_async_backend</span><span class=\"p\">()</span><span class=\"o\">.</span><span class=\"n\">create_task_group</span><span class=\"p\">()</span>\n<span class=\"w\">           </span><span class=\"pm\">~~~~~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/anyio/_core/_eventloop.py&quot;</span>, line <span class=\"m\">189</span>, in <span class=\"n\">get_async_backend</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">NoEventLoopError</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">2</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"gr\">anyio.NoEventLoopError</span>: <span class=\"n\">Not currently running on any asynchronous event loop. Available async backends: asyncio, trio</span>\n\n<span class=\"gt\">During handling of the above exception, another exception occurred:</span>\n\n<span class=\"gt\">Traceback (most recent call last):</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/marimo/_runtime/executor.py&quot;</span>, line <span class=\"m\">112</span>, in <span class=\"n\">execute_cell_async</span>\n<span class=\"w\">    </span><span class=\"k\">await</span> <span class=\"nb\">eval</span><span class=\"p\">(</span><span class=\"n\">cell</span><span class=\"o\">.</span><span class=\"n\">body</span><span class=\"p\">,</span> <span class=\"n\">glbls</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/tmp/marimo_3204410/__marimo__cell_nWHF_.py&quot;</span>, line <span class=\"m\">18</span>, in <span class=\"n\">&lt;module&gt;</span>\n<span class=\"w\">    </span><span class=\"n\">github_mcp_tools</span> <span class=\"o\">=</span> <span class=\"k\">await</span> <span class=\"n\">mcp_client</span><span class=\"o\">.</span><span class=\"n\">get_tools</span><span class=\"p\">()</span>\n<span class=\"w\">                       </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_mcp_adapters/client.py&quot;</span>, line <span class=\"m\">197</span>, in <span class=\"n\">get_tools</span>\n<span class=\"w\">    </span><span class=\"n\">tools_list</span> <span class=\"o\">=</span> <span class=\"k\">await</span> <span class=\"n\">asyncio</span><span class=\"o\">.</span><span class=\"n\">gather</span><span class=\"p\">(</span><span class=\"o\">*</span><span class=\"n\">load_mcp_tool_tasks</span><span class=\"p\">)</span>\n<span class=\"w\">                 </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/asyncio/tasks.py&quot;</span>, line <span class=\"m\">362</span>, in <span class=\"n\">__wakeup</span>\n<span class=\"w\">    </span><span class=\"n\">future</span><span class=\"o\">.</span><span class=\"n\">result</span><span class=\"p\">()</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/asyncio/tasks.py&quot;</span>, line <span class=\"m\">289</span>, in <span class=\"n\">__step_run_and_handle_result</span>\n<span class=\"w\">    </span><span class=\"n\">result</span> <span class=\"o\">=</span> <span class=\"n\">coro</span><span class=\"o\">.</span><span class=\"n\">send</span><span class=\"p\">(</span><span class=\"kc\">None</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_mcp_adapters/tools.py&quot;</span>, line <span class=\"m\">478</span>, in <span class=\"n\">load_mcp_tools</span>\n<span class=\"w\">    </span><span class=\"k\">async</span> <span class=\"k\">with</span> <span class=\"n\">create_session</span><span class=\"p\">(</span>\n<span class=\"w\">               </span><span class=\"pm\">~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">connection</span><span class=\"p\">,</span> <span class=\"n\">mcp_callbacks</span><span class=\"o\">=</span><span class=\"n\">mcp_callbacks</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span> <span class=\"k\">as</span> <span class=\"n\">tool_session</span><span class=\"p\">:</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/contextlib.py&quot;</span>, line <span class=\"m\">214</span>, in <span class=\"n\">__aenter__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"k\">await</span> <span class=\"n\">anext</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">gen</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_mcp_adapters/sessions.py&quot;</span>, line <span class=\"m\">410</span>, in <span class=\"n\">create_session</span>\n<span class=\"w\">    </span><span class=\"k\">async</span> <span class=\"k\">with</span> <span class=\"n\">_create_streamable_http_session</span><span class=\"p\">(</span><span class=\"o\">**</span><span class=\"n\">params</span><span class=\"p\">)</span> <span class=\"k\">as</span> <span class=\"n\">session</span><span class=\"p\">:</span>\n<span class=\"w\">               </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/contextlib.py&quot;</span>, line <span class=\"m\">214</span>, in <span class=\"n\">__aenter__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"k\">await</span> <span class=\"n\">anext</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">gen</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/langchain_mcp_adapters/sessions.py&quot;</span>, line <span class=\"m\">311</span>, in <span class=\"n\">_create_streamable_http_session</span>\n<span class=\"w\">    </span><span class=\"n\">streamablehttp_client</span><span class=\"p\">(</span>\n<span class=\"w\">    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~^</span>\n<span class=\"w\">    </span>    <span class=\"n\">url</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^</span>\n<span class=\"w\">    </span><span class=\"o\">...&lt;</span><span class=\"mi\">5</span> <span class=\"n\">lines</span><span class=\"o\">&gt;...</span>\n<span class=\"w\">    </span>    <span class=\"o\">**</span><span class=\"n\">kwargs</span><span class=\"p\">,</span>\n<span class=\"w\">        </span><span class=\"pm\">^^^^^^^^^</span>\n<span class=\"w\">    </span><span class=\"p\">)</span> <span class=\"k\">as</span> <span class=\"p\">(</span><span class=\"n\">read</span><span class=\"p\">,</span> <span class=\"n\">write</span><span class=\"p\">,</span> <span class=\"n\">_</span><span class=\"p\">),</span>\n<span class=\"w\">    </span><span class=\"pm\">^</span>\n  File <span class=\"nb\">&quot;/home/linuxbrew/.linuxbrew/opt/python@3.14/lib/python3.14/contextlib.py&quot;</span>, line <span class=\"m\">214</span>, in <span class=\"n\">__aenter__</span>\n<span class=\"w\">    </span><span class=\"k\">return</span> <span class=\"k\">await</span> <span class=\"n\">anext</span><span class=\"p\">(</span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">gen</span><span class=\"p\">)</span>\n<span class=\"w\">           </span><span class=\"pm\">^^^^^^^^^^^^^^^^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/mcp/client/streamable_http.py&quot;</span>, line <span class=\"m\">716</span>, in <span class=\"n\">streamablehttp_client</span>\n<span class=\"w\">    </span><span class=\"k\">async</span> <span class=\"k\">with</span> <span class=\"n\">client</span><span class=\"p\">:</span>\n<span class=\"w\">               </span><span class=\"pm\">^^^^^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpx/_client.py&quot;</span>, line <span class=\"m\">2016</span>, in <span class=\"n\">__aexit__</span>\n<span class=\"w\">    </span><span class=\"k\">await</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_transport</span><span class=\"o\">.</span><span class=\"fm\">__aexit__</span><span class=\"p\">(</span><span class=\"n\">exc_type</span><span class=\"p\">,</span> <span class=\"n\">exc_value</span><span class=\"p\">,</span> <span class=\"n\">traceback</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpx/_transports/default.py&quot;</span>, line <span class=\"m\">372</span>, in <span class=\"n\">__aexit__</span>\n<span class=\"w\">    </span><span class=\"k\">await</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_pool</span><span class=\"o\">.</span><span class=\"fm\">__aexit__</span><span class=\"p\">(</span><span class=\"n\">exc_type</span><span class=\"p\">,</span> <span class=\"n\">exc_value</span><span class=\"p\">,</span> <span class=\"n\">traceback</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py&quot;</span>, line <span class=\"m\">364</span>, in <span class=\"n\">__aexit__</span>\n<span class=\"w\">    </span><span class=\"k\">await</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">aclose</span><span class=\"p\">()</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py&quot;</span>, line <span class=\"m\">353</span>, in <span class=\"n\">aclose</span>\n<span class=\"w\">    </span><span class=\"k\">await</span> <span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_close_connections</span><span class=\"p\">(</span><span class=\"n\">closing_connections</span><span class=\"p\">)</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpcore/_async/connection_pool.py&quot;</span>, line <span class=\"m\">343</span>, in <span class=\"n\">_close_connections</span>\n<span class=\"w\">    </span><span class=\"k\">with</span> <span class=\"n\">AsyncShieldCancellation</span><span class=\"p\">():</span>\n<span class=\"w\">         </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpcore/_synchronization.py&quot;</span>, line <span class=\"m\">203</span>, in <span class=\"n\">__init__</span>\n<span class=\"w\">    </span><span class=\"bp\">self</span><span class=\"o\">.</span><span class=\"n\">_backend</span> <span class=\"o\">=</span> <span class=\"n\">current_async_library</span><span class=\"p\">()</span>\n<span class=\"w\">                    </span><span class=\"pm\">~~~~~~~~~~~~~~~~~~~~~^^</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/httpcore/_synchronization.py&quot;</span>, line <span class=\"m\">30</span>, in <span class=\"n\">current_async_library</span>\n<span class=\"w\">    </span><span class=\"n\">environment</span> <span class=\"o\">=</span> <span class=\"n\">sniffio</span><span class=\"o\">.</span><span class=\"n\">current_async_library</span><span class=\"p\">()</span>\n  File <span class=\"nb\">&quot;/home/imjonezz/Desktop/AIMakerspace9/14_MCP_Connectors/.venv/lib/python3.14/site-packages/sniffio/_impl.py&quot;</span>, line <span class=\"m\">93</span>, in <span class=\"n\">current_async_library</span>\n<span class=\"w\">    </span><span class=\"k\">raise</span> <span class=\"n\">AsyncLibraryNotFoundError</span><span class=\"p\">(</span>\n<span class=\"w\">    </span>    <span class=\"s2\">&quot;unknown async library, or not in async context&quot;</span>\n<span class=\"w\">    </span><span class=\"p\">)</span>\n<span class=\"gr\">sniffio._impl.AsyncLibraryNotFoundError</span>: <span class=\"n\">unknown async library, or not in async context</span>\n</pre></div>\n</span>",
+          "mimetype": "application/vnd.marimo+traceback"
+        }
+      ]
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "18b9820296285656288568353eceb6bb",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "d8f3ac98184743d1cd6754ff5be404fc",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "b86496d263801ec16d67bf73db8314d4",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "78a69e4ce65c4ecefe8f50f51382d4f9",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "26dd7263d62dbca10b632be8cfc840a8",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "57781353eac96a02f7ea6a1a42027ba2",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "b555aa4a367a968f15790311cd79d901",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "4cdd99d15378b26a7bb9a1091690a0c6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "3a639f38f06092dd0155fd526bb4d847",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "264776c19e13a83d73a5b99ace3b9dc2",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wlCL",
+      "code_hash": "80955bf9d9650288520bbbaf975107b2",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wAgl",
+      "code_hash": "aab4063e0fc0ab9e3a444d661a0856c1",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dGlV",
+      "code_hash": "4298e3852b6744d40da83cd7183f29a4",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lgWD",
+      "code_hash": "b70c1e47e89aa4325c0c783907266533",
+      "outputs": [
+        {
+          "type": "error",
+          "ename": "exception",
+          "evalue": "An ancestor raised an exception (AsyncLibraryNotFoundError): ",
+          "traceback": []
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "urSm",
+      "code_hash": "4cdd99d15378b26a7bb9a1091690a0c6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}
