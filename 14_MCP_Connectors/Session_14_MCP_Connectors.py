@@ -96,19 +96,21 @@ def _():
     load_dotenv()
 
     if not os.environ.get("X_BEARER_TOKEN"):
-        os.environ["X_BEARER_TOKEN"] = getpass.getpass("Enter your X Bearer Token:")
-
-    if not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter your OpenAI API Key:")
+        os.environ["X_BEARER_TOKEN"] = getpass.getpass(
+            "Enter your X Bearer Token:"
+        )
 
     if not os.environ.get("GITHUB_PAT"):
         os.environ["GITHUB_PAT"] = getpass.getpass("Enter your GitHub PAT:")
+
+    os.environ["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY")
     return (os,)
 
 
 @app.cell
 def _():
     import nest_asyncio
+
     nest_asyncio.apply()  # Required for async operations in Jupyter
     return
 
@@ -138,7 +140,11 @@ def _(mo):
 def _():
     from langchain_openai import ChatOpenAI
 
-    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
+    llm = ChatOpenAI(
+        model="gpt-4.1-mini",
+        temperature=0,
+        base_url="http://192.168.1.185:8080/v1",
+    )
 
     # Test the connection
     response = llm.invoke("Say 'MCP agent ready!' in exactly those words.")
@@ -172,7 +178,7 @@ def _(os):
 
 
     @tool
-    def search_recent_posts(query: str, max_results: int = 20) -> str:
+    def search_recent_posts(query: str, max_results: int = 5) -> str:
         """Search recent X/Twitter posts using the v2 API.
         Returns posts from the last 7 days matching the query.
         Use this for keyword searches, hashtag searches, or general topic searches.
@@ -221,12 +227,16 @@ def _(os):
             max_results: Number of results to return (10-100, default 20)
         """
         query = f"from:{username} -is:retweet"
-        return search_recent_posts.invoke({"query": query, "max_results": max_results})
+        return search_recent_posts.invoke(
+            {"query": query, "max_results": max_results}
+        )
 
 
     x_api_tools = [search_recent_posts, get_user_posts]
-    print(f"Created {len(x_api_tools)} X API tools: {[t.name for t in x_api_tools]}")
-    return get_user_posts, x_api_tools
+    print(
+        f"Created {len(x_api_tools)} X API tools: {[t.name for t in x_api_tools]}"
+    )
+    return BEARER_TOKEN, get_user_posts, requests, tool, x_api_tools
 
 
 @app.cell(hide_code=True)
@@ -240,7 +250,7 @@ def _(mo):
 @app.cell
 def _(get_user_posts):
     # Quick test — fetch recent posts from a public account
-    _result = get_user_posts.invoke({'username': 'llm_wizard', 'max_results': 10})
+    _result = get_user_posts.invoke({"username": "llm_wizard", "max_results": 10})
     print(_result[:500])
     return
 
@@ -417,7 +427,6 @@ def _(
     When asked to perform GitHub operations, use the appropriate GitHub MCP tool.
     Always use the available tools when appropriate. Be concise in your responses."""
 
-
     # Step 3: Bind tools to the LLM
     llm_with_tools = llm.bind_tools(all_tools)
 
@@ -450,7 +459,9 @@ def _(
     workflow.add_node("tools", tool_node)
 
     workflow.add_edge(START, "agent")
-    workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
+    workflow.add_conditional_edges(
+        "agent", should_continue, {"tools": "tools", "end": END}
+    )
     workflow.add_edge("tools", "agent")
 
     # Compile with MemorySaver for short-term memory across turns
@@ -517,7 +528,7 @@ def _(mo):
 @app.cell
 async def _(ask_agent):
     # Ask the agent to fetch posts — it will use the get_user_posts tool
-    _result = await ask_agent('Get recent posts from @llm_wizard on X/Twitter.')
+    _result = await ask_agent("Get recent posts from @llm_wizard on X/Twitter.")
     print(_result[:1000])
     return
 
@@ -560,7 +571,7 @@ def _(mo):
 
     ##### Answer:
 
-    *Your answer here*
+    *I don't know what the question is, but I assume it's whether summary.md is created, which it is.*
     """)
     return
 
@@ -592,8 +603,53 @@ def _(mo):
 
 
 @app.cell
-def _():
-    ### YOUR CODE HERE
+async def _(BEARER_TOKEN, ask_agent, requests, tool):
+    @tool
+    def get_user_profile(username: str) -> str:
+        """Retrieve a user's public profile information from X/Twitter.
+
+        Returns the display name, bio/description, follower count, following count,
+        post count, and account creation date.
+
+        Args:
+            username: The X/Twitter handle without the @ sign (e.g., 'AndrewYNg')
+        """
+        url = f"https://api.x.com/2/users/by/username/{username}"
+        headers = {"Authorization": f"Bearer {BEARER_TOKEN}"}
+        params = {"user.fields": "description,public_metrics,created_at"}
+
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        data = response.json()
+
+        if "data" not in data:
+            return f"User @{username} not found."
+
+        user = data["data"]
+        metrics = user.get("public_metrics", {})
+
+        profile_info = [
+            f"Display Name: {user.get('name', 'N/A')}",
+            f"Username: @{user.get('username', 'N/A')}",
+            f"Bio/Description: {user.get('description', 'N/A')}",
+            f"Followers: {metrics.get('followers_count', 0):,}",
+            f"Following: {metrics.get('following_count', 0):,}",
+            f"Posts: {metrics.get('tweet_count', 0):,}",
+            f"Account Created: {user.get('created_at', 'N/A')}",
+        ]
+
+        return "\n".join(profile_info)
+
+    print(f"Created new tool: get_user_profile")
+
+    x_api_tools_updated = [get_user_profile]
+    print(f"Updated X API tools: {[t.name for t in x_api_tools_updated]}")
+
+    profile_result = await ask_agent(
+            "Use the get_user_profile tool to retrieve the profile information for AndrewYNg on X/Twitter."
+        )
+    print("=== Profile Result ===")
+    print(profile_result)
     return
 
 
@@ -623,7 +679,9 @@ def _(mo):
 
 @app.cell
 async def _(ask_agent):
-    _result = await ask_agent("Using your GitHub tools, create a new public repository on my account called `x-post-summarizer-2026`. Add a description: 'AI-generated summary of a public figure's 2026 X posts, built with LangGraph, MCP tools, and the X API.' Initialize it with a README.")
+    _result = await ask_agent(
+        "Using your GitHub tools, create a new public repository on my account called `x-post-summarizer-2026`. Add a description: 'AI-generated summary of a public figure's 2026 X posts, built with LangGraph, MCP tools, and the X API.' Initialize it with a README."
+    )
     print(_result)
     return
 
@@ -640,7 +698,9 @@ def _(mo):
 
 @app.cell
 async def _(ask_agent):
-    _result = await ask_agent("Using your GitHub tools, create a new file called `summary.md` in the `x-post-summarizer-2026` repo on the `main` branch. The file should contain the X post summary you generated earlier. Use the commit message: 'Add 2026 X post summary'.")
+    _result = await ask_agent(
+        "Using your GitHub tools, create a new file called `summary.md` in the `x-post-summarizer-2026` repo on the `main` branch. The file should contain the X post summary you generated earlier. Use the commit message: 'Add 2026 X post summary'."
+    )
     print(_result)
     return
 
@@ -657,7 +717,9 @@ def _(mo):
 
 @app.cell
 async def _(ask_agent):
-    _result = await ask_agent("Create a new branch called `add-metadata` in my `x-post-summarizer-2026` repo. On that branch, create a file called `metadata.json` that contains: the account handle analyzed, the date range of posts, the number of posts analyzed, and the top 5 themes identified from the summary. Commit it with the message 'Add analysis metadata'.")
+    _result = await ask_agent(
+        "Create a new branch called `add-metadata` in my `x-post-summarizer-2026` repo. On that branch, create a file called `metadata.json` that contains: the account handle analyzed, the date range of posts, the number of posts analyzed, and the top 5 themes identified from the summary. Commit it with the message 'Add analysis metadata'."
+    )
     print(_result)
     return
 
@@ -674,7 +736,9 @@ def _(mo):
 
 @app.cell
 async def _(ask_agent):
-    _result = await ask_agent("Open a pull request in my `x-post-summarizer-2026` repo from the `add-metadata` branch to `main`. Title it 'Add analysis metadata' and include a description summarizing what the metadata file contains.")
+    _result = await ask_agent(
+        "Open a pull request in my `x-post-summarizer-2026` repo from the `add-metadata` branch to `main`. Title it 'Add analysis metadata' and include a description summarizing what the metadata file contains."
+    )
     print(_result)
     return
 
@@ -692,7 +756,9 @@ def _(mo):
 @app.cell
 async def _(ask_agent):
     x_search_script = 'import requests\nimport json\nimport os\nfrom datetime import datetime\n\nBEARER_TOKEN = os.environ.get("X_BEARER_TOKEN")\n\ndef search_recent_posts(query: str, max_results: int = 20) -> dict:\n    """Search recent X posts using the v2 API."""\n    url = "https://api.x.com/2/tweets/search/recent"\n    headers = {"Authorization": f"Bearer {BEARER_TOKEN}"}\n    params = {\n        "query": query,\n        "max_results": min(max_results, 100),\n        "tweet.fields": "created_at,public_metrics,author_id,text",\n        "expansions": "author_id",\n        "user.fields": "name,username",\n    }\n    response = requests.get(url, headers=headers, params=params)\n    response.raise_for_status()\n    return response.json()\n\ndef get_user_posts(username: str, max_results: int = 20) -> dict:\n    """Get recent posts from a specific user."""\n    query = f"from:{username} -is:retweet"\n    return search_recent_posts(query, max_results)\n\nif __name__ == "__main__":\n    import sys\n    handle = sys.argv[1] if len(sys.argv) > 1 else "llM_wizard"\n    print(f"Searching for recent posts from @{handle}...")\n    results = get_user_posts(handle)\n    with open("posts.json", "w") as f:\n        json.dump(results, f, indent=2)\n    tweets = results.get("data", [])\n    print(f"Found {len(tweets)} posts.")\n    for tweet in tweets:\n        print(f"  [{tweet["created_at"][:10]}] {tweet["text"][:100]}...")\n'
-    _result = await ask_agent(f"Using your GitHub tools, create a new file called `x_search.py` in the `x-post-summarizer-2026` repo on the `main` branch. Use the commit message: 'Add X API search script'. Here is the file content:\n\n{x_search_script}")
+    _result = await ask_agent(
+        f"Using your GitHub tools, create a new file called `x_search.py` in the `x-post-summarizer-2026` repo on the `main` branch. Use the commit message: 'Add X API search script'. Here is the file content:\n\n{x_search_script}"
+    )
     print(_result)
     return
 
@@ -709,7 +775,9 @@ def _(mo):
 
 @app.cell
 async def _(ask_agent):
-    _result = await ask_agent("Update the README.md in my `x-post-summarizer-2026` repo on main to include: a project description explaining this repo summarizes a public figure's 2026 X posts using AI, the handle analyzed, how the project was built (using a LangGraph agent with GitHub MCP tools for repo operations and the X API v2 for post retrieval), and instructions for someone else to replicate the process — including how to set up their X API Bearer Token and install Python dependencies.")
+    _result = await ask_agent(
+        "Update the README.md in my `x-post-summarizer-2026` repo on main to include: a project description explaining this repo summarizes a public figure's 2026 X posts using AI, the handle analyzed, how the project was built (using a LangGraph agent with GitHub MCP tools for repo operations and the X API v2 for post retrieval), and instructions for someone else to replicate the process — including how to set up their X API Bearer Token and install Python dependencies."
+    )
     print(_result)
     return
 
@@ -723,7 +791,7 @@ def _(mo):
 
     ##### Answer:
 
-    *Your answer here*
+    GitHub MCP tools through the agent made repository operations feel smoother since I could just describe what I wanted in plain language rather than looking up git command syntax. But it felt less transparent because I couldn't easily see exactly what underlying operations were happening — there's no equivalent to running `git status` or `git log` to verify what's going on.
     """)
     return
 
@@ -737,7 +805,7 @@ def _(mo):
 
     ##### Answer:
 
-    *Your answer here*
+    MCP servers give you standardized, automatically-discoverable tools with zero implementation overhead — but you're dependent on external server availability and have less control over the underlying logic. Direct `@tool` wrappers give you full transparency, immediate debugging, and complete control, but require more manual code and aren't portable across different agent frameworks. Use MCP when a well-maintained server already exists for your needs (like GitHub), and use `@tool` wrappers when you need quick custom integrations, have simple API needs, or want precise control without the MCP infrastructure layer.
     """)
     return
 
@@ -771,11 +839,44 @@ def _(mo):
 
 
 @app.cell
-def _():
-    ### YOUR CODE HERE
+async def _(ask_agent):
+    second_account = "karpathy"
+
+    posts_result = await ask_agent(
+        f"Get recent posts from @{second_account} on X/Twitter so I can compare them with the llm_wizard posts we fetched earlier."
+    )
+    print("=== First: Posts from second account ===")
+    print(posts_result[:800])
+
+    comparison_content = await ask_agent(
+        f"Based on all the posts you've seen from both @{second_account} and llm_wizard, "
+        "create a detailed comparison.md file with the following sections:\n"
+        "1. **Account Overview** - Brief description of each account's focus\n"
+        "2. **Topic Analysis** - Side-by-side comparison of main topics discussed by each\n"
+        "3. **Tone and Sentiment** - Differences in writing style, sentiment, and approach\n"
+        "4. **Posting Frequency** - Comparison of when and how often each posts\n"
+        "5. **Top 3 Notable Posts** - From each account, including the post content and why it's notable\n"
+        "6. **Focus Area Conclusion** - Brief conclusion about each account's core focus and expertise area\n\n"
+        "Format everything in clean markdown with clear headings. Make it comprehensive and insightful."
+    )
+
+    comparison_result = await ask_agent(
+        f"Using your GitHub tools, create a new branch called 'add-comparison' in my x-post-summarizer-2026 repo. "
+        "Then create a file called comparison.md on that branch with the following content:\n\n{comparison_content}\n\n"
+        "Commit it with the message: 'Add multi-account comparison between llm_wizard and "
+        + second_account
+        + "'"
+    )
+    print(comparison_result)
+
+    pr_result = await ask_agent(
+        "Open a pull request in my x-post-summarizer-2026 repo from the add-comparison branch to main. "
+        "Title it 'Add multi-account comparison' and include a description explaining this adds a detailed comparison "
+        f"between llm_wizard and @{second_account} covering topics, tone, and notable posts."
+    )
+    print(pr_result)
     return
 
 
 if __name__ == "__main__":
     app.run()
-
