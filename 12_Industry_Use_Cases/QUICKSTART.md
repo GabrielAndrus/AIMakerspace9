@@ -17,6 +17,11 @@ Start all services (Qdrant vector DB, Langfuse observability, WebUI):
 
 ```bash
 docker compose up -d
+```
+
+The app starts automatically at http://localhost:7860. To restart it manually:
+
+```bash
 docker compose exec app python -m src.app
 ```
 
@@ -28,13 +33,54 @@ Verify services are running:
 
 First-time Langfuse setup: Create an account at http://localhost:3000
 
+### Environment Configuration
+
+The platform uses centralized configuration in `src/config.py`. Service URLs can be customized via environment variables:
+
+```bash
+# LLM Inference Server
+export LLM_INFERENCE_URL="http://your-openai-compatible-server:port/v1"
+export LLM_MODEL_NAME="your-model"
+
+# Web Search for Error Investigation
+export SEARXNG_URL="http://your-searxng-url"
+
+# Langfuse Observability
+export LANGFUSE_HOST="http://localhost:3000"
+export LANGFUSE_PUBLIC_KEY="your-public-key"
+export LANGFUSE_SECRET_KEY="your-secret-key"
+
+# Qdrant Vector Database
+export QDRANT_URL="http://localhost:6333"
+```
+
+These can also be set in `docker-compose.yml` for containerized deployments.
+
 ### WebUI Tabs
 
-The WebUI includes:
-- **RAG Chat**: Query indexed documentation
-- **AutoML**: Automated model selection for tabular data
-- **RAGAS Evaluation**: Test retrieval quality (dense/sparse/hybrid methods) with metrics like faithfulness, context_precision, context_recall
-- **LLM Fine-tuning**: Agent-based dataset analysis (recommends SFT/DPO/GRPO), training file upload, and error diagnosis
+The WebUI includes 5 tabs for complete ML workflow:
+
+1. **Tabular ML**
+   - Automated model selection using RAG from sklearn docs
+   - Ensemble training with RandomForest + XGBoost + LightGBM
+   - Upload CSV/TSV data for classification or regression tasks
+
+2. **LLM Fine-tuning**
+   - Agent-based dataset analysis with training method recommendations (SFT/DPO/GRPO)
+   - Support for all three fine-tuning methods
+   - Automatic error diagnosis with user-friendly explanations
+
+3. **Inference Playground** (Tabular Models)
+   - Test trained tabular models interactively
+   - Get predictions with confidence scores
+
+4. **LLM Inference**
+   - Test fine-tuned LLM models with LoRA adapters
+   - Interactive chat interface for model evaluation
+
+5. **RAGAS Evaluation**
+   - Test retrieval quality (dense/sparse/hybrid methods)
+   - Metrics: faithfulness, context_precision, context_recall
 
 ---
 
@@ -160,6 +206,34 @@ model = AutoModelForCausalLM.from_pretrained(
 
 With 128GB VRAM, most models run without quantization.
 
+### Error Investigation & User Guidance
+
+The platform includes a deep error investigation system that provides actionable guidance when things go wrong:
+
+- **Automatic Error Analysis**: When training fails, the Error Investigator agent automatically analyzes the error
+- **Search-Based Solutions**: Uses web search to find relevant solutions from documentation and forums
+- **User-Friendly Explanations**: Technical errors are translated into plain language explanations in the WebUI
+- **Expandable Details**: Click to expand investigation results with specific recommendations for fixing issues
+
+All error information appears directly in the Gradio WebUI - no need to check terminal logs!
+
+### Langfuse Observability
+
+The platform provides comprehensive tracing via Langfuse:
+
+- **LLM Call Tracking**: Every LLM generation is logged with inputs, outputs, and model metadata
+- **Retrieval Spans**: Vector search operations are tracked with query/results
+- **Training Flow Monitoring**: Metaflow training runs are traced end-to-end
+- **Error Investigation Traces**: See the full investigation process when errors occur
+
+Access Langfuse dashboard: http://localhost:3000
+
+Traced operations include:
+- Error investigation (query generation, search analysis, synthesis)
+- Dataset analysis and model selection
+- LLM inference and fine-tuning flows
+- Retrieval operations (dense, sparse, hybrid)
+
 ### Qdrant Dimension Mismatch
 
 If changing embedding models, recreate the collection:
@@ -207,8 +281,17 @@ curl http://localhost:6333  # Should return Qdrant info
 | Start services | `docker-compose up -d` |
 | Stop services | `docker-compose down` |
 | Build index | `docker-compose exec app python -m src.retrieval.indexer` |
-| Start WebUI | Already running via docker-compose (http://localhost:7860) |
+| Start WebUI | Auto-starts with `docker compose up -d` (http://localhost:7860) |
 | GPU training container | See Step 3 Docker command |
+| Check Langfuse logs | `docker-compose logs -f langfuse-server` |
+| Check Qdrant dashboard | http://localhost:6333/dashboard |
+
+### Key Files
+
+- `src/config.py` - Centralized configuration for all services
+- `src/app.py` - Main Gradio WebUI with 5 tabs
+- `src/utils/langfuse_client.py` - Langfuse tracing utilities
+- `src/flows/runner.py` - Metaflow training execution
 
 ---
 

@@ -27,6 +27,7 @@ services:
         condition: service_started
       langfuse-web:
         condition: service_started
+    command: python -m src.app
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

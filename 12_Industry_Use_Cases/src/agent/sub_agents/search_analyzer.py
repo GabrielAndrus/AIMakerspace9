@@ -1,9 +1,9 @@
 """Search Analyzer Agent - Evaluates and filters search results."""
 
 import json
-from langchain.chat_models import init_chat_model
 
 from src.config import settings
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call
 
 
 QUALITY_EVALUATION_PROMPT = """Evaluate the relevance of these search results for debugging an ML error.
@@ -58,24 +58,27 @@ def search_analyzer_node(state: dict) -> dict:
     results_str = _format_search_results(search_results)
     
     try:
-        model = init_chat_model(
-            "openai/gpt-oss-120b",
-            model_provider="openai",
-            config={
-                "base_url": settings.LLM_INFERENCE_URL,
-                "api_key": settings.LLM_INFERENCE_KEY,
-                "temperature": 0.1,
-            },
-        )
-        
-        prompt = QUALITY_EVALUATION_PROMPT.format(
-            error_type=error_type,
-            error_message=error_message,
-            search_results=results_str
-        )
-        
-        response = model.invoke(prompt)
-        content = response.content.strip()
+        with langfuse_trace("search_quality_evaluation", input={"error_type": error_type, "results_count": len(search_results)}) as trace:
+            from langchain.chat_models import init_chat_model
+            model = init_chat_model(
+                settings.LLM_MODEL_NAME,
+                model_provider="openai",
+                base_url=settings.LLM_INFERENCE_URL,
+                api_key=settings.LLM_INFERENCE_KEY,
+                temperature=0.1,
+            )
+
+            prompt = QUALITY_EVALUATION_PROMPT.format(
+                error_type=error_type,
+                error_message=error_message,
+                search_results=results_str
+            )
+
+            response = model.invoke(prompt)
+            content = response.content.strip()
+            trace_llm_call(trace, "evaluate_quality", prompt, content, settings.LLM_MODEL_NAME)
+            if trace:
+                trace.update(output={"evaluation": content})
         
         try:
             if content.startswith("```"):

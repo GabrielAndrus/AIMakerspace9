@@ -9,6 +9,8 @@ load_dotenv()
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, Filter, FieldCondition, MatchValue
 
+from src.utils.langfuse_client import trace_retrieval
+
 
 class QdrantRetriever:
     """Retriever for Qdrant vector database."""
@@ -81,6 +83,10 @@ class QdrantRetriever:
         self, query_embedding: list[float], limit: int = 5, source_filter: str = None, method: str = "dense"
     ) -> list[dict[str, Any]]:
         """Search for similar documents."""
+        
+        from src.utils.langfuse_client import get_langfuse_client
+        trace = get_langfuse_client().start_span(name="qdrant_search", input={"method": method, "limit": limit, "collection": self.collection_name})
+        
         if self.use_hybrid and method != "dense":
             from src.retrieval.embeddings import embed_query
             query_text = ""
@@ -89,18 +95,37 @@ class QdrantRetriever:
                     query_text = payload.payload["content"]
                     break
 
+            span = trace.start_span(name="hybrid_search")
             results = self.hybrid_retriever.search(query_text, limit=limit, method=method)
-            return results
+            span.end()
+        else:
+            search_params = {"limit": limit}
 
-        search_params = {"limit": limit}
+            if source_filter:
+                search_params["query_filter"] = Filter(
+                    must=[FieldCondition(key="source", match=MatchValue(value=source_filter))]
+                )
 
-        if source_filter:
-            search_params["query_filter"] = Filter(
-                must=[FieldCondition(key="source", match=MatchValue(value=source_filter))]
+            span = trace.start_span(name="dense_search")
+            results_raw = self.client.query_points(
+                collection_name=self.collection_name, query=query_embedding, **search_params
             )
+            results = [{"id": hit.id, "score": hit.score, "payload": hit.payload} for hit in results_raw.points]
+            span.update(output={"num_results": len(results), "top_scores": [r["score"] for r in results[:3]]})
+            span.end()
 
-        results = self.client.query_points(
-            collection_name=self.collection_name, query=query_embedding, **search_params
-        )
-
-        return [{"id": hit.id, "score": hit.score, "payload": hit.payload} for hit in results.points]
+        trace.update(output={
+            "num_results": len(results),
+            "results": [
+                {
+                    "id": str(r.get("id", "")),
+                    "score": r.get("score"),
+                    "content": r.get("payload", {}).get("content", "")[:300],
+                    "source": r.get("payload", {}).get("source", ""),
+                    "title": r.get("payload", {}).get("title", ""),
+                }
+                for r in results[:5]
+            ],
+        })
+        trace.end()
+        return results

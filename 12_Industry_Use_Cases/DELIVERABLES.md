@@ -1,18 +1,20 @@
+Loom video:
+https://www.loom.com/share/eec4e81436d94b019d1ce73a2f31a7ce
+
 Section 1
 1. The people of the Forge Utah community have need to train ML models, but don't know how and aren't data scientists.
 2. There are many people in the Forge Utah community who are interested in the predictive power of classical ML. They've heard of gradient-boosted trees and regression, and likely they've even worked with or around people who have given them insights using ML models. Not everyone, however is technical, nor a data scientist. There are technical developers that are part of the community whose eyes glaze over immediately upon mentioning anything Bayesian, and product managers with oodles of ideas for how to leverage good predictive power, but with the assumption that someone else is just going to build it. Even those who ARE data scientists don't have the entireity of the scikit-learn catalogue memorized, nor do they know how to apply all of it, and even fewer still know about training LLMs. Forge Utah has recently come into some compute in the form of 2 DGX Sparks, but this adds another layer of complexity, where only someone who knows both the Spark _and_ data science would be able to effectively train anything.
-3. [
-    {"question": "I have a CSV file with customer purchase amounts and want to predict future spending. What model should I use?", "answer": "For predicting continuous numerical values like purchase amounts, the system will recommend a regression model such as Linear Regression, Ridge Regression, or Gradient Boosting Regressor depending on the data characteristics."},
-    {"question": "I want to predict whether a loan will be approved or denied based on applicant data. What model type do I need?", "answer": "This is a binary classification problem. The system will recommend classifiers like Logistic Regression, Random Forest Classifier, or Gradient Boosting Classifier based on your data structure."},
-    {"question": "I have a dataset with 10,000 rows and 50 features. Will the system still work?", "answer": "Yes, the agent will analyze your dataset dimensions and recommend appropriate models. For higher-dimensional data, it may suggest dimensionality reduction techniques (PCA) or regularization-heavy models to prevent overfitting."},
-    {"question": "I don't know anything about machine learning. Can I still use this platform?", "answer": "Yes, the entire purpose of this platform is to serve non-technical users. You simply upload your dataset, and the agent walks you through model selection and training without requiring ML expertise."},
-    {"question": "My dataset has missing values. How does the system handle this?", "answer": "The RAG agent will retrieve documentation on imputation strategies from scikit-learn and recommend appropriate handling (mean/median imputation, KNN imputation, or dropping features) based on your specific data."},
-    {"question": "How do I verify the model actually works after training?", "answer": "The platform includes an inference playground where you can load your trained model and test it against a validation dataset or input new predictions to verify accuracy."},
-    {"question": "Can I access this through an API instead of the web UI?", "answer": "Yes, Gradio bundles FastAPI automatically, so you have both a web interface and a documented REST API for programmatic access."},
-    {"question": "I have text data I want to classify into categories. What will the system recommend?", "answer": "For text classification, the agent will recommend models like Naive Bayes (MultinomialNB), LinearSVC, or ensemble methods after potentially suggesting TF-IDF vectorization or embedding approaches."},
-    {"question": "The system recommended a model I don't recognize. Where can I learn more?", "answer": "The system provides links to the scikit-learn documentation for each recommended model, allowing you to understand what the algorithm does and why it was selected."},
-    {"question": "I have a small dataset with only 100 rows. Is that enough data?", "answer": "The agent will assess your dataset size and may recommend simpler models (like Logistic Regression or Decision Trees) that are less prone to overfitting on small datasets, rather than complex deep learning approaches."}
-]
+3. {"question": "What model works best for imbalanced binary classification with 10000 rows?", "ground_truth": "For imbalanced binary classification with 10000 rows, use XGBoost with scale_pos_weight parameter set to the ratio of negative/positive samples. This achieves F1-score improvement of 15% over default settings. RandomForest with class_weight='balanced' is also a good option."}
+{"question": "I have a dataset with 5000 rows and 200 features. Which model should I use?", "ground_truth": "For datasets with 5000 rows and 200 features (high-dimensional), use XGBoost with colsample_bytree and subsample to handle dimensionality. Logistic Regression with L1 regularization (sparse solution) also works well. Random Forest may overfit without careful tuning of max_features."}
+{"question": "My dataset has many categorical features with high cardinality. What preprocessing and model combo works best?", "ground_truth": "For high cardinality categorical features, use CatBoost which handles categorical features natively without explicit encoding. It uses ordered target encoding to prevent target leakage and provides excellent performance out-of-the-box."}
+{"question": "I need interpretability for regulatory compliance. Which models provide feature importance?", "ground_truth": "For interpretability and regulatory compliance, use tree-based models like DecisionTree, RandomForest, or XGBoost which provide built-in feature_importances_ attribute. Use SHAP values with any tree-based model to explain individual predictions."}
+{"question": "What is the fastest model to train on large datasets with 100K+ samples?", "ground_truth": "For fastest training on large datasets (100K+ samples), use LightGBM which uses histogram-based algorithms. Training time: LightGBM ~1-3 seconds, XGBoost ~3-8 seconds, Random Forest ~5-10 seconds, Logistic Regression <1 second."}
+{"question": "How do I handle missing values in my dataset?", "ground_truth": "Tree-based models (Random Forest, XGBoost, LightGBM) handle missing values natively. For other models, use SimpleImputer with mean, median, or most_frequent strategy. Consider using IterativeImputer for multivariate imputation."}
+{"question": "What cross-validation strategy should I use for classification?", "ground_truth": "Use StratifiedKFold for classification to maintain class distribution in each fold. For small datasets, use RepeatedStratifiedKFold to get more reliable estimates. Default k=5 or k=10 is usually sufficient."}
+{"question": "Do I need to scale features for tree-based models?", "ground_truth": "Tree-based models (Random Forest, XGBoost, LightGBM) generally do not require feature scaling as they are invariant to monotonic transformations. However, scaling is required for SVM, KNN, and linear models for optimal performance."}
+{"question": "What model works well for text classification with small sample sizes?", "ground_truth": "For text classification with small sample sizes, Naive Bayes (MultinomialNB or BernoulliNB) works well as it is fast and performs adequately with high-dimensional sparse data. It is a good baseline for text classification."}
+{"question": "How do I choose between XGBoost and LightGBM?", "ground_truth": "Use LightGBM for fastest training on large datasets and when categorical features are present (it handles them directly). Use XGBoost when you need more regularization options or when working with imbalanced datasets (scale_pos_weight parameter)."}
+
 
 Section 2
 Proposed Solution:
@@ -122,13 +124,20 @@ Section 4
 Done =)
 
 Section 5
-RAGAS Evaluation Results:
-*Results will be added after running the RAGAS evaluation pipeline. The `src/evaluation/ragas_evaluator.py` is configured to measure:*
-- **Faithfulness**: Whether generated answers are grounded in retrieved context
-- **Context Precision**: Relevance of retrieved documents to the question
-- **Context Recall**: Coverage of ground truth in retrieved context
+RAGAS Evaluation Results on specifically the questions above in section 1:
+Faithfulness, Context Precision, Context Recall
+50%, 92%, 33%
+57%, 89%, 100%
+86%, 83%, 50%
+100%, 70%, 100%
+50%, 99.9%, 100%
+83%, 99.9%, 100%
+100%, 99.9%, 100%
+25%, 99.9%, 100%
+100%, 99.9%, 100%
+null, 25%, 100%
 
-*Run evaluation with: `python -m src.evaluation.ragas_evaluator --compare` to compare Dense vs Hybrid retrieval methods.*
+2. I'm drawing specifically the conclusion that faithfulness will be my most important metric here, as it's the one with the largest distribution of results. I want to specifically examine question 4, why did it get 100% faithfulness and recall but only 70% precision while most questions the dense retrieval got 99.9% precision. That said, the RAG pipeline seems to be working swimmingly!
 
 Section 6
 Advanced Retrieval:

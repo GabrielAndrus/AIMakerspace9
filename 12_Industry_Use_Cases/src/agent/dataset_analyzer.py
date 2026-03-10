@@ -1,19 +1,16 @@
 """Dataset analyzer agent using DeepAgents pattern.
 
 This agent analyzes uploaded datasets and recommends appropriate training methods
-(SFT, DPO, or GRPO) based on data structure and content.
+(SFT, DPO, or GRPO) based on data structure and content, enhanced with RAG
+retrieval from the knowledge base.
 """
 
 import json
 from pathlib import Path
 from typing import Any, TypedDict
 
-from langchain.chat_models import init_chat_model
-from langchain_core.tools import tool
-from langfuse import Langfuse, get_client
-from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
-
 from src.config import settings
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call, trace_retrieval
 
 
 class DatasetAnalysis(TypedDict):
@@ -28,66 +25,83 @@ class DatasetAnalysis(TypedDict):
 
 
 class DatasetAnalyzer:
-    """Analyze datasets and recommend training methods using DeepAgents pattern."""
+    """Analyze datasets and recommend training methods using LLM + RAG."""
 
-    def __init__(self, model_name: str = "openai/gpt-oss-120b"):
-        self.model_name = model_name
-        self.model = None
-        self.llm_available = False
-        self.langfuse_handler = None
-        self._setup_model()
-        self._setup_langfuse()
+    def __init__(self, model_name: str = None):
+        self.model_name = model_name or settings.LLM_MODEL_NAME
+        self.model = self._create_model()
+        self.retriever = None
+        self._embed_query = None
+        self._setup_retriever()
 
-    def _setup_model(self):
+    def _create_model(self):
+        from langchain.chat_models import init_chat_model
+        return init_chat_model(
+            settings.LLM_MODEL_NAME,
+            model_provider="openai",
+            base_url=settings.LLM_INFERENCE_URL,
+            api_key=settings.LLM_INFERENCE_KEY,
+            temperature=0.1,
+        )
+
+    def _setup_retriever(self):
         try:
-            base_url = settings.LLM_INFERENCE_URL
-            api_key = settings.LLM_INFERENCE_KEY
-            
-            self.model = init_chat_model(
-                self.model_name,
-                model_provider="openai",
-                config={
-                    "base_url": base_url,
-                    "api_key": api_key,
-                    "temperature": 0.1,
-                },
-            )
-            self.llm_available = True
+            from src.retrieval import embed_query, QdrantRetriever
+            self.retriever = QdrantRetriever()
+            self._embed_query = embed_query
         except Exception:
-            self.llm_available = False
+            self.retriever = None
 
-    def _setup_langfuse(self):
-        if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_SECRET_KEY:
-            Langfuse(
-                public_key=settings.LANGFUSE_PUBLIC_KEY,
-                secret_key=settings.LANGFUSE_SECRET_KEY,
-                host=settings.LANGFUSE_HOST,
-            )
-            self.langfuse_handler = LangfuseCallbackHandler()
+    def _retrieve_context(self, detected_format: str, file_type: str, trace=None) -> str:
+        """Retrieve relevant training method documentation from Qdrant."""
+        if self.retriever is None:
+            return ""
+
+        format_to_query = {
+            "dpo": "DPO Direct Preference Optimization dataset format requirements chosen rejected",
+            "grpo": "GRPO Group Relative Policy Optimization reward function ground_truth dataset format",
+            "sft_conversational": "SFT Supervised Fine-Tuning conversational messages dataset format",
+            "sft_continued_pretraining": "SFT continued pre-training text dataset format language modeling",
+            "sft_qa": "SFT question answer pairs dataset format instruction fine-tuning",
+            "sft_instruction": "SFT instruction prompt completion dataset format",
+            "unknown": "LLM training method selection dataset format detection SFT DPO GRPO",
+        }
+
+        query = format_to_query.get(detected_format, format_to_query["unknown"])
+        query += f" {file_type} file format"
+
+        try:
+            query_embedding = self._embed_query(query)
+            results = self.retriever.search(query_embedding, limit=5)
+
+            if trace:
+                trace_retrieval(
+                    trace, "rag_dataset_analysis",
+                    query, [{"score": r.get("score"), "title": r["payload"].get("title")} for r in results[:5]]
+                )
+
+            contexts = [r["payload"]["content"] for r in results if r.get("payload", {}).get("content")]
+            if contexts:
+                return "\n\n".join([f"[{i+1}] {ctx}" for i, ctx in enumerate(contexts)])
+        except Exception as e:
+            print(f"[DatasetAnalyzer] RAG retrieval failed: {e}")
+
+        return ""
 
     def analyze(self, file_path: str) -> DatasetAnalysis:
         path = Path(file_path)
-        
+
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
         file_type = self._detect_file_type(path)
         sample_data = self._extract_sample(path, file_type)
         detected_format = self._detect_format(sample_data, file_type)
-        
-        agent_analysis = self._run_agent_analysis(file_path, file_type, sample_data, detected_format)
-        
-        if self.langfuse_handler:
-            try:
-                get_client().flush()
-            except Exception:
-                pass
-        
-        return agent_analysis
+
+        return self._run_agent_analysis(file_path, file_type, sample_data, detected_format)
 
     def _detect_file_type(self, path: Path) -> str:
         suffix = path.suffix.lower()
-        
         if suffix in [".txt", ".text"]:
             return "text"
         elif suffix == ".pdf":
@@ -145,7 +159,7 @@ class DatasetAnalyzer:
     def _detect_format(self, sample_data: list[dict] | str, file_type: str) -> str:
         if isinstance(sample_data, list) and len(sample_data) > 0:
             first = sample_data[0]
-            
+
             if "prompt" in first and "chosen" in first and "rejected" in first:
                 return "dpo"
             elif "messages" in first:
@@ -159,28 +173,27 @@ class DatasetAnalyzer:
                 return "sft_continued_pretraining"
             elif "title" in first and "content" in first:
                 return "sft_continued_pretraining"
-        
+
         if isinstance(sample_data, str):
             if "Q:" in sample_data and "A:" in sample_data:
                 return "sft_qa"
-        
+
         return "unknown"
 
     def _run_agent_analysis(
-        self, 
-        file_path: str, 
+        self,
+        file_path: str,
         file_type: str,
         sample_data: list[dict] | str,
         detected_format: str
     ) -> DatasetAnalysis:
-        
+
         sample_str = json.dumps(sample_data, indent=2) if isinstance(sample_data, list) else sample_data
         if len(sample_str) > 3000:
             sample_str = sample_str[:3000] + "\n... [truncated]"
-        
-        if not self.llm_available:
-            return self._rule_based_analysis(file_path, file_type, sample_data, detected_format)
-        
+
+        rag_context = self._retrieve_context(detected_format, file_type)
+
         prompt = f"""Analyze this dataset for LLM fine-tuning and recommend the best training method.
 
 FILE: {file_path}
@@ -190,10 +203,13 @@ DETECTED FORMAT: {detected_format}
 SAMPLE DATA (first 10 items/lines):
 {sample_str}
 
-Based on the data structure, determine:
+RELEVANT KNOWLEDGE BASE CONTEXT:
+{rag_context if rag_context else "No additional context retrieved."}
+
+Based on the data structure and the knowledge base information, determine:
 1. Most suitable training method (SFT, DPO, or GRPO)
 2. Whether the data is properly formatted for that method
-3. Any issues or missing fields
+3. Any issues or missing fields based on expected formats
 4. Suggestions for improvement
 
 Respond in JSON format:
@@ -204,21 +220,21 @@ Respond in JSON format:
     "suggestions": ["list", "of", "improvements"]
 }}"""
 
-        try:
-            callbacks = [self.langfuse_handler] if self.langfuse_handler else None
-            response = self.model.invoke(prompt, config={"callbacks": callbacks} if callbacks else {})
-            
+        with langfuse_trace("dataset_analysis", input={"file_path": file_path, "file_type": file_type, "detected_format": detected_format, "rag_context_used": bool(rag_context)}) as trace:
+            response = self.model.invoke(prompt)
+
             content = response.content if hasattr(response, 'content') else str(response)
-            
-            json_match = content
-            if "```json" in content:
-                json_match = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                json_match = content.split("```")[1].split("```")[0].strip()
-            
-            agent_result = json.loads(json_match)
-        except Exception:
-            return self._rule_based_analysis(file_path, file_type, sample_data, detected_format)
+            trace_llm_call(trace, "analyze_dataset", prompt, content, settings.LLM_MODEL_NAME)
+            if trace:
+                trace.update(output={"analysis": content})
+
+        json_match = content
+        if "```json" in content:
+            json_match = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            json_match = content.split("```")[1].split("```")[0].strip()
+
+        agent_result = json.loads(json_match)
 
         return DatasetAnalysis(
             file_path=file_path,
@@ -231,103 +247,29 @@ Respond in JSON format:
             suggestions=agent_result.get("suggestions", []),
         )
 
-    def _rule_based_analysis(
-        self,
-        file_path: str,
-        file_type: str,
-        sample_data: list[dict] | str,
-        detected_format: str
-    ) -> DatasetAnalysis:
-        
-        issues = []
-        suggestions = []
-        
-        if detected_format == "dpo":
-            recommended_method = "DPO"
-            reasoning = "Dataset contains prompt/chosen/rejected fields, which is the standard format for Direct Preference Optimization (DPO). This method trains models to prefer better responses over worse ones."
-            
-            if isinstance(sample_data, list) and len(sample_data) > 0:
-                first = sample_data[0]
-                if not all(k in first for k in ["prompt", "chosen", "rejected"]):
-                    issues.append("Missing required fields (prompt, chosen, rejected)")
-        
-        elif detected_format == "grpo":
-            recommended_method = "GRPO"
-            reasoning = "Dataset contains ground_truth or pattern validation fields, suitable for Group Relative Policy Optimization (GRPO). This method uses reward signals based on correctness or pattern matching."
-            
-            if isinstance(sample_data, list) and len(sample_data) > 0:
-                first = sample_data[0]
-                if "ground_truth" not in first and "pattern" not in first:
-                    issues.append("Missing ground_truth or pattern field for validation")
-        
-        elif detected_format in ["sft_conversational", "sft_continued_pretraining", "sft_qa"]:
-            recommended_method = "SFT"
-            
-            if detected_format == "sft_conversational":
-                reasoning = "Dataset contains conversational messages with assistant responses, ideal for Supervised Fine-Tuning (SFT). This teaches the model to follow conversation patterns."
-            elif detected_format == "sft_continued_pretraining":
-                reasoning = "Dataset contains text/title/content pairs, suitable for continued pre-training or SFT. This helps the model learn domain-specific knowledge."
-            else:
-                reasoning = "Dataset uses Q:/A: format, a simple structure for question-answer pairs. Recommended for Supervised Fine-Tuning (SFT) to teach the model factual knowledge."
-            
-            if isinstance(sample_data, list) and len(sample_data) > 0:
-                first = sample_data[0]
-                if detected_format == "sft_conversational" and not any(m.get("role") == "assistant" for m in first.get("messages", [])):
-                    issues.append("Conversational data missing assistant responses")
-        
-        else:
-            recommended_method = "SFT"
-            reasoning = "Format could not be automatically detected. Defaulting to SFT (Supervised Fine-Tuning) as the most versatile training method."
-            suggestions.append("Verify dataset structure matches expected format (messages, prompt/chosen/rejected, or Q:/A:)")
-            suggestions.append("Consider converting to a standard format if this doesn't match")
-        
-        if not issues:
-            suggestions.append("Dataset structure looks good for the recommended method")
-        
-        return DatasetAnalysis(
-            file_path=file_path,
-            file_type=file_type,
-            sample_data=sample_data[:5] if isinstance(sample_data, list) else sample_data[:500],
-            detected_format=detected_format,
-            recommended_method=recommended_method,
-            reasoning=reasoning,
-            issues=issues,
-            suggestions=suggestions,
-        )
-
-    def _fallback_recommendation(self, detected_format: str) -> str:
-        format_to_method = {
-            "dpo": "DPO",
-            "grpo": "GRPO",
-            "sft_conversational": "SFT",
-            "sft_continued_pretraining": "SFT",
-            "sft_qa": "SFT",
-        }
-        return format_to_method.get(detected_format, "SFT")
-
     def generate_report(self, analysis: DatasetAnalysis) -> str:
         report_lines = [
-            f"<h3>Dataset Analysis Report</h3>",
+            "<h3>Dataset Analysis Report</h3>",
             f"<p><b>File:</b> {Path(analysis['file_path']).name}</p>",
             f"<p><b>Type:</b> {analysis['file_type']}</p>",
             f"<p><b>Detected Format:</b> {analysis['detected_format']}</p>",
-            f"<hr>",
+            "<hr>",
             f"<h4>Recommendation: <span style='color:#10b981'>{analysis['recommended_method']}</span></h4>",
             f"<p>{analysis['reasoning']}</p>",
         ]
-        
+
         if analysis["issues"]:
             report_lines.append("<h4 style='color:#ef4444'>Issues Found:</h4><ul>")
             for issue in analysis["issues"]:
                 report_lines.append(f"<li>{issue}</li>")
             report_lines.append("</ul>")
-        
+
         if analysis["suggestions"]:
             report_lines.append("<h4 style='color:#f59e0b'>Suggestions:</h4><ul>")
             for suggestion in analysis["suggestions"]:
                 report_lines.append(f"<li>{suggestion}</li>")
             report_lines.append("</ul>")
-        
+
         return "\n".join(report_lines)
 
 
@@ -337,28 +279,7 @@ def analyze_dataset(file_path: str) -> DatasetAnalysis:
 
 
 def get_training_recommendation(file_path: str) -> tuple[str, str]:
-    analysis = analyze_dataset(file_path)
-    
-    report_lines = [
-        f"<h3>Dataset Analysis Report</h3>",
-        f"<p><b>File:</b> {Path(analysis['file_path']).name}</p>",
-        f"<p><b>Type:</b> {analysis['file_type']}</p>",
-        f"<p><b>Detected Format:</b> {analysis['detected_format']}</p>",
-        f"<hr>",
-        f"<h4>Recommendation: <span style='color:#10b981'>{analysis['recommended_method']}</span></h4>",
-        f"<p>{analysis['reasoning']}</p>",
-    ]
-    
-    if analysis["issues"]:
-        report_lines.append("<h4 style='color:#ef4444'>Issues Found:</h4><ul>")
-        for issue in analysis["issues"]:
-            report_lines.append(f"<li>{issue}</li>")
-        report_lines.append("</ul>")
-    
-    if analysis["suggestions"]:
-        report_lines.append("<h4 style='color:#f59e0b'>Suggestions:</h4><ul>")
-        for suggestion in analysis["suggestions"]:
-            report_lines.append(f"<li>{suggestion}</li>")
-        report_lines.append("</ul>")
-    
-    return analysis["recommended_method"], "\n".join(report_lines)
+    analyzer = DatasetAnalyzer()
+    analysis = analyzer.analyze(file_path)
+    report_html = analyzer.generate_report(analysis)
+    return analysis["recommended_method"], report_html

@@ -9,6 +9,8 @@ from typing import Generator, Optional
 
 import torch
 
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call
+
 
 class LocalLLMInference:
     """Load and run inference on locally-trained LoRA adapters."""
@@ -68,16 +70,19 @@ class LocalLLMInference:
             )
 
         self.base_model_name = base_model
-        self.model, self.tokenizer = self._load_with_unsloth(base_model)
 
-        try:
+        with langfuse_trace(
+            "load_lora_adapter",
+            input={"lora_path": str(lora_path), "base_model": base_model},
+        ) as trace:
+            self.model, self.tokenizer = self._load_with_unsloth(base_model)
+
             from peft import PeftModel
 
             self.model = PeftModel.from_pretrained(self.model, str(lora_path))
-        except ImportError:
-            from transformers import PeftModel
 
-            self.model = PeftModel.from_pretrained(self.model, str(lora_path))
+            if trace:
+                trace.update(output={"status": "loaded", "base_model": base_model, "lora_path": str(lora_path)})
 
         return True
 
@@ -127,6 +132,26 @@ class LocalLLMInference:
 
             return model, tokenizer
 
+    def _prepare_inputs(self, prompt: str, system_prompt: Optional[str], messages: list) -> dict:
+        """Tokenize and prepare model inputs as a dict with input_ids on the correct device."""
+        try:
+            if hasattr(self.tokenizer, "apply_chat_template"):
+                input_ids = self.tokenizer.apply_chat_template(
+                    messages,
+                    return_tensors="pt",
+                    add_generation_prompt=True,
+                )
+                # apply_chat_template may return a tensor or a dict
+                if isinstance(input_ids, dict):
+                    return {k: v.to(self.model.device) for k, v in input_ids.items()}
+                return {"input_ids": input_ids.to(self.model.device)}
+            else:
+                inputs = self.tokenizer(prompt, return_tensors="pt")
+                return {k: v.to(self.model.device) for k, v in inputs.items()}
+        except Exception:
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            return {k: v.to(self.model.device) for k, v in inputs.items()}
+
     def generate(
         self,
         prompt: str,
@@ -159,48 +184,30 @@ class LocalLLMInference:
 
         messages.append({"role": "user", "content": prompt})
 
-        # Try to use chat template if available
-        try:
-            if hasattr(self.tokenizer, "apply_chat_template"):
-                inputs = self.tokenizer.apply_chat_template(
-                    messages,
-                    return_tensors="pt",
-                    add_generation_prompt=True,
+        inputs = self._prepare_inputs(prompt, system_prompt, messages)
+
+        with langfuse_trace(
+            "local_lora_inference",
+            input={"prompt": prompt, "system_prompt": system_prompt, "model": self.base_model_name,
+                   "max_new_tokens": max_new_tokens, "temperature": temperature},
+        ) as trace:
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    temperature=temperature if do_sample else 1.0,
+                    top_p=top_p if do_sample else 1.0,
+                    do_sample=do_sample,
+                    pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
                 )
-            else:
-                # Fallback to simple tokenization
-                inputs = self.tokenizer(
-                    prompt,
-                    return_tensors="pt",
-                )
-        except Exception as e:
-            # If chat template fails, fall back to simple tokenization
-            inputs = self.tokenizer(prompt, return_tensors="pt")
 
-        if hasattr(inputs, 'keys'):
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-        else:
-            inputs = inputs.to(self.model.device)
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs if hasattr(inputs, 'keys') else {"input_ids": inputs},
-                max_new_tokens=max_new_tokens,
-                temperature=temperature if do_sample else 1.0,
-                top_p=top_p if do_sample else 1.0,
-                do_sample=do_sample,
-                pad_token_id=self.tokenizer.eos_token_id
-                if self.tokenizer.pad_token is not None
-                else 0,
-            )
-
-        if hasattr(inputs, 'keys'):
             input_length = inputs["input_ids"].shape[1]
-        else:
-            input_length = inputs.shape[1]
+            generated_tokens = outputs[0][input_length:]
+            response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-        generated_tokens = outputs[0][input_length:]
-        response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            trace_llm_call(trace, "lora_generate", prompt, response, self.base_model_name or "unknown")
+            if trace:
+                trace.update(output={"response": response, "tokens_generated": len(generated_tokens)})
 
         return response
 
@@ -232,71 +239,42 @@ class LocalLLMInference:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        # Try to use chat template if available
-        try:
-            inputs = self.tokenizer.apply_chat_template(
-                messages,
-                return_tensors="pt",
-                add_generation_prompt=True,
-            )
-        except AttributeError:
-            # Fallback for tokenizers without chat template support
-            inputs = self.tokenizer(prompt, return_tensors="pt")
+        inputs = self._prepare_inputs(prompt, system_prompt, messages)
 
-        if hasattr(inputs, 'keys'):
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-        else:
-            inputs = inputs.to(self.model.device)
+        from transformers import TextIteratorStreamer
+
+        streamer = TextIteratorStreamer(
+            self.tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
 
         generation_kwargs = {
+            **inputs,
             "max_new_tokens": max_new_tokens,
             "temperature": temperature,
             "do_sample": True,
             "streamer": streamer,
+            "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
         }
-        
-        if hasattr(inputs, 'keys'):
-            generation_kwargs["input_ids"] = inputs
-        # Set up streamer
-        try:
-            from transformers import TextIteratorStreamer
 
-            streamer = TextIteratorStreamer(
-                self.tokenizer, skip_prompt=True, skip_special_tokens=True
-            )
-        except ImportError:
-            # Fallback: generate all at once and yield chunks
-            response = self.generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                max_new_tokens=max_new_tokens,
-                temperature=temperature,
-            )
-            # Yield in chunks for streaming-like behavior
-            chunk_size = 10
-            for i in range(0, len(response), chunk_size):
-                yield response[i : i + chunk_size]
-            return
+        with langfuse_trace(
+            "local_lora_inference_streaming",
+            input={"prompt": prompt, "system_prompt": system_prompt, "model": self.base_model_name,
+                   "max_new_tokens": max_new_tokens, "temperature": temperature},
+        ) as trace:
+            thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+            thread.start()
 
-        generation_kwargs = {
-            "max_new_tokens": max_new_tokens,
-            "temperature": temperature,
-            "do_sample": True,
-            "streamer": streamer,
-        }
-        
-        if hasattr(inputs, 'keys'):
-            generation_kwargs["input_ids"] = inputs
-        else:
-            generation_kwargs["input_ids"] = inputs
+            full_response = []
+            for text in streamer:
+                full_response.append(text)
+                yield text
 
-        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
-        thread.start()
+            thread.join()
 
-        for text in streamer:
-            yield text
-
-        thread.join()
+            response_text = "".join(full_response)
+            trace_llm_call(trace, "lora_generate_streaming", prompt, response_text, self.base_model_name or "unknown")
+            if trace:
+                trace.update(output={"response": response_text, "chunks": len(full_response)})
 
 
 def merge_lora_to_base(

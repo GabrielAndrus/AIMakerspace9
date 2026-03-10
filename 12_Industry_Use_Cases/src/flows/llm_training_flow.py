@@ -216,6 +216,14 @@ class LLMTrainingFlow(FlowSpec):
                 elif "pattern" in first_example:
                     detected_template = "format_check"
 
+            if detected_template is None:
+                raise ValueError(
+                    "GRPO training requires a reward template. Either:\n"
+                    "1. Select 'math' or 'format_check' in the UI\n"
+                    "2. Include 'ground_truth' field in your JSONL for math rewards\n"
+                    "3. Include 'pattern' field in your JSONL for format checking"
+                )
+
             self.adapter_path = train_grpo(
                 dataset=self.dataset,
                 base_model=self.base_model,
@@ -265,36 +273,22 @@ class LLMTrainingFlow(FlowSpec):
 
         The trainer already saves the model, but we add metadata here.
         """
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        try:
-            model = AutoModelForCausalLM.from_pretrained(
-                self.adapter_path,
-                device_map="cpu",
-                torch_dtype=torch.float16,
-            )
-            tokenizer = AutoTokenizer.from_pretrained(self.adapter_path)
-
-            self.model_path = save_lora_adapter_package(
-                model=model,
-                tokenizer=tokenizer,
-                output_dir=settings.MODEL_DIR,
-                model_name=f"llm_{self.training_method.lower()}",
-                version=str(current.run_id),
-                base_model=self.base_model,
-                lora_config=None,
-                training_args={
-                    "method": self.training_method.lower(),
-                    "num_epochs": int(self.epochs),
-                    "learning_rate": float(self.learning_rate),
-                },
-                metrics={"train_loss": self.metrics.get("train_loss")},
-            )
-
-        except Exception as e:
-            print(f"Warning: Could not save with full metadata: {e}")
-            self.model_path = self.adapter_path
+        self.model_path = save_lora_adapter_package(
+            model=None,
+            tokenizer=None,
+            output_dir=settings.MODEL_DIR,
+            model_name=f"llm_{self.training_method.lower()}",
+            version=str(current.run_id),
+            base_model=self.base_model,
+            adapter_path=self.adapter_path,
+            lora_config=None,
+            training_args={
+                "method": self.training_method.lower(),
+                "num_epochs": int(self.epochs),
+                "learning_rate": float(self.learning_rate),
+            },
+            metrics={"train_loss": self.metrics.get("train_loss")},
+        )
 
         print(f"LoRA adapter saved to {self.model_path}")
         self.next(self.end)

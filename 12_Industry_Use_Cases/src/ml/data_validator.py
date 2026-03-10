@@ -7,7 +7,9 @@ from typing import Any, Optional
 import pandas as pd
 from openai import OpenAI, APIError, APIConnectionError, APITimeoutError
 
+from src.config import settings
 from src.utils.error_handling import format_error
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call, trace_retrieval
 from ..retrieval import embed_query, QdrantRetriever
 
 logger = logging.getLogger(__name__)
@@ -281,8 +283,8 @@ def detect_task_type_and_recommend_model(
     task_type = detect_task_type(y)
     logger.info(f"Task type detected: {task_type}")
 
-    inference_url = os.getenv("LLM_INFERENCE_URL", "http://192.168.1.185:8080/v1")
-    inference_key = os.getenv("LLM_INFERENCE_KEY", "not-needed")
+    inference_url = settings.LLM_INFERENCE_URL
+    inference_key = settings.LLM_INFERENCE_KEY
 
     column_types = get_column_types(df)
     profile = {
@@ -299,55 +301,61 @@ def detect_task_type_and_recommend_model(
     recommendation = None
     fallback_used = False
 
-    # Step 1: Try embedding query with retry
-    try:
-        logger.info(f"Embedding query: {query[:50]}...")
-        
-        def embed_func():
-            return embed_query(query)
-        
-        query_embedding = _retry_with_backoff(embed_func, max_retries=2, base_delay=0.5)
-        logger.info("Query embedding successful")
-        
-    except Exception as e:
-        logger.warning(f"Embedding failed after retries: {e}. Using fallback recommendation.")
-        fallback_used = True
-        return {
-            "task_type": task_type,
-            "model_recommendation": _get_fallback_recommendation(task_type, len(df), len(df.columns)),
-            "retrieved_contexts": [],
-            "fallback_used": True,
-        }
+    with langfuse_trace("model_recommendation", input={"task_type": task_type, "n_rows": len(df), "n_features": len(df.columns), "query": query}) as trace:
+        # Step 1: Try embedding query with retry
+        try:
+            logger.info(f"Embedding query: {query[:50]}...")
 
-    # Step 2: Try Qdrant search with retry
-    try:
-        logger.info("Searching Qdrant...")
-        retriever = QdrantRetriever()
-        logger.debug(f"QDRANT URL: {retriever.url}")
-        
-        def search_func():
-            return retriever.search(query_embedding, limit=5)
-        
-        retrieved = _retry_with_backoff(search_func, max_retries=2, base_delay=0.5)
-        logger.info(f"Retrieved {len(retrieved)} contexts from Qdrant")
-        
-        if retrieved:
-            contexts = [r["payload"]["content"] for r in retrieved]
-        else:
-            logger.warning("Qdrant returned no results. Proceeding without RAG context.")
-            
-    except Exception as e:
-        logger.warning(f"Qdrant search failed after retries: {e}. Proceeding without RAG context.")
-        contexts = []
+            def embed_func():
+                return embed_query(query)
 
-    # Step 3: Try LLM inference with retry
-    try:
-        logger.info("Calling LLM for model recommendation...")
-        client = OpenAI(base_url=inference_url, api_key=inference_key)
+            query_embedding = _retry_with_backoff(embed_func, max_retries=2, base_delay=0.5)
+            logger.info("Query embedding successful")
 
-        context_text = "\n\n".join([f"Context {i + 1}: {ctx}" for i, ctx in enumerate(contexts)]) if contexts else "No additional context available."
+        except Exception as e:
+            logger.warning(f"Embedding failed after retries: {e}. Using fallback recommendation.")
+            fallback_used = True
+            return {
+                "task_type": task_type,
+                "model_recommendation": _get_fallback_recommendation(task_type, len(df), len(df.columns)),
+                "retrieved_contexts": [],
+                "fallback_used": True,
+            }
 
-        prompt = f"""Given the following dataset profile and relevant documentation contexts, recommend the best ML model(s) to use.
+        # Step 2: Try Qdrant search with retry
+        try:
+            logger.info("Searching Qdrant...")
+            retriever = QdrantRetriever()
+            logger.debug(f"QDRANT URL: {retriever.url}")
+
+            def search_func():
+                return retriever.search(query_embedding, limit=5)
+
+            retrieved = _retry_with_backoff(search_func, max_retries=2, base_delay=0.5)
+            logger.info(f"Retrieved {len(retrieved)} contexts from Qdrant")
+
+            if retrieved:
+                contexts = [r["payload"]["content"] for r in retrieved]
+            else:
+                logger.warning("Qdrant returned no results. Proceeding without RAG context.")
+
+            trace_retrieval(trace, "qdrant_model_search", query,
+                [{"score": r.get("score"), "title": r["payload"].get("title", "")} for r in retrieved[:5]] if retrieved else [])
+
+        except Exception as e:
+            logger.warning(f"Qdrant search failed after retries: {e}. Proceeding without RAG context.")
+            contexts = []
+
+        # Step 3: Try LLM inference with retry
+        try:
+            logger.info("Calling LLM for model recommendation...")
+            client = OpenAI(base_url=inference_url, api_key=inference_key)
+
+            context_text = "\n\n".join([f"Context {i + 1}: {ctx}" for i, ctx in enumerate(contexts)]) if contexts else "No additional context available."
+
+            prompt = f"""Given the following dataset profile and relevant documentation contexts, recommend the best ML model(s) to use.
+
+IMPORTANT: Only recommend models from scikit-learn, XGBoost, or LightGBM. These are the libraries available in our system. Do NOT recommend CatBoost or other unavailable libraries.
 
 Dataset Profile:
 {profile}
@@ -361,38 +369,43 @@ Based on the above, provide:
 
 Provide your recommendation in a clear, structured format."""
 
-        def llm_func():
-            return client.chat.completions.create(
-                model="minimax-m2.5-mlx@8bit",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert ML engineer. Recommend models based on dataset characteristics and scikit-learn best practices.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-                max_tokens=500,
-            )
-        
-        response = _retry_with_backoff(llm_func, max_retries=2, base_delay=1.0)
-        recommendation = response.choices[0].message.content
-        logger.info(f"LLM response received, length: {len(recommendation)}")
-        
-    except (APIConnectionError, APITimeoutError) as e:
-        logger.warning(f"LLM connection failed: {e}. Using fallback recommendation.")
-        fallback_used = True
-        recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
-        
-    except APIError as e:
-        logger.warning(f"LLM API error: {e}. Using fallback recommendation.")
-        fallback_used = True
-        recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
-        
-    except Exception as e:
-        logger.warning(f"LLM inference failed: {e}. Using fallback recommendation.")
-        fallback_used = True
-        recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
+            def llm_func():
+                return client.chat.completions.create(
+                    model=settings.LLM_MODEL_NAME,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert ML engineer. Recommend models based on dataset characteristics and scikit-learn best practices. Only recommend models from scikit-learn, XGBoost, or LightGBM.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.3,
+                    max_tokens=500,
+                )
+
+            response = _retry_with_backoff(llm_func, max_retries=2, base_delay=1.0)
+            recommendation = response.choices[0].message.content
+            logger.info(f"LLM response received, length: {len(recommendation)}")
+
+            trace_llm_call(trace, "model_recommendation_llm", prompt, recommendation, settings.LLM_MODEL_NAME)
+
+        except (APIConnectionError, APITimeoutError) as e:
+            logger.warning(f"LLM connection failed: {e}. Using fallback recommendation.")
+            fallback_used = True
+            recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
+
+        except APIError as e:
+            logger.warning(f"LLM API error: {e}. Using fallback recommendation.")
+            fallback_used = True
+            recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
+
+        except Exception as e:
+            logger.warning(f"LLM inference failed: {e}. Using fallback recommendation.")
+            fallback_used = True
+            recommendation = _get_fallback_recommendation(task_type, len(df), len(df.columns))
+
+        if trace:
+            trace.update(output={"recommendation": recommendation, "fallback_used": fallback_used})
 
     return {
         "task_type": task_type,

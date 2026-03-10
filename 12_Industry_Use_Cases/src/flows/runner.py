@@ -12,6 +12,8 @@ from typing import Optional
 
 os.environ["METAFLOW_DEFAULT_METADATA"] = "local"
 
+from src.utils.langfuse_client import langfuse_trace
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,8 +23,14 @@ def _investigate_training_error(
     task_type: str,
     flow_name: str,
     flow_args: dict,
-):
-    """Investigate a training error and print recommendations."""
+) -> str:
+    """Investigate a training error and return recommendations.
+
+    Returns:
+        Investigation text with recommendations for the user.
+    """
+    investigation_results = []
+    
     try:
         from src.agent.error_investigator import investigate_error
         
@@ -41,9 +49,14 @@ def _investigate_training_error(
             base_model=flow_args.get("base_model"),
         ):
             print(message)
+            investigation_results.append(message)
             
     except Exception as e:
-        print(f"[ErrorInvestigator] Failed to investigate error: {e}")
+        error_msg = f"[ErrorInvestigator] Failed to investigate error: {e}"
+        print(error_msg)
+        investigation_results.append(error_msg)
+    
+    return "\n".join(investigation_results)
 
 
 def run_ml_training_flow(
@@ -74,34 +87,42 @@ def run_ml_training_flow(
     logger.info(f"Starting MLTrainingFlow with data_path={data_path}, target_column={target_column}")
     
     try:
-        with Runner("src/flows/ml_training_flow.py", show_output=False).run(
-            data_path=data_path,
-            target_column=target_column,
-        ) as running:
-            
-            if wait_for_completion and running.status == "failed":
-                error_details = running.stderr or "No stderr available"
-                logger.error(f"Flow failed with status: {running.status}")
-                logger.error(f"Error details: {error_details}")
-                
-                tb_str = f"MLTrainingFlow failed: {error_details}"
-                _investigate_training_error(
-                    error=RuntimeError(error_details),
-                    tb_str=tb_str,
-                    task_type="ml_training",
-                    flow_name="MLTrainingFlow",
-                    flow_args=flow_args,
-                )
-                
-                raise RuntimeError(
-                    f"MLTrainingFlow failed.\n"
-                    f"Data path: {data_path}\n"
-                    f"Target column: {target_column}\n"
-                    f"Error: {error_details}"
-                )
+        with langfuse_trace("run_ml_training_flow", input=flow_args) as trace:
+            with Runner("src/flows/ml_training_flow.py", show_output=False).run(
+                data_path=data_path,
+                target_column=target_column,
+            ) as running:
 
-            logger.info(f"Flow completed successfully, pathspec: {running.run.pathspec}")
-            return f"{running.run.pathspec}"
+                if wait_for_completion and running.status == "failed":
+                    error_details = running.stderr or "No stderr available"
+                    logger.error(f"Flow failed with status: {running.status}")
+                    logger.error(f"Error details: {error_details}")
+
+                    tb_str = f"MLTrainingFlow failed: {error_details}"
+                    investigation_text = _investigate_training_error(
+                        error=RuntimeError(error_details),
+                        tb_str=tb_str,
+                        task_type="ml_training",
+                        flow_name="MLTrainingFlow",
+                        flow_args=flow_args,
+                    )
+
+                    if trace:
+                        trace.update(output={"status": "failed", "error": error_details[:500]})
+
+                    raise RuntimeError(
+                        f"MLTrainingFlow failed.\n"
+                        f"Data path: {data_path}\n"
+                        f"Target column: {target_column}\n"
+                        f"Error: {error_details}"
+                        + (f"\n\nInvestigation Results:\n{investigation_text}" if investigation_text else "")
+                    )
+
+                pathspec = f"{running.run.pathspec}"
+                logger.info(f"Flow completed successfully, pathspec: {pathspec}")
+                if trace:
+                    trace.update(output={"status": "completed", "run_id": pathspec})
+                return pathspec
             
     except RuntimeError:
         raise
@@ -109,7 +130,7 @@ def run_ml_training_flow(
         tb_str = traceback.format_exc()
         logger.error(f"Unexpected error running MLTrainingFlow: {e}")
         
-        _investigate_training_error(
+        investigation_text = _investigate_training_error(
             error=e,
             tb_str=tb_str,
             task_type="ml_training",
@@ -117,7 +138,10 @@ def run_ml_training_flow(
             flow_args=flow_args,
         )
         
-        raise RuntimeError(f"Failed to execute MLTrainingFlow: {e}")
+        raise RuntimeError(
+            f"Failed to execute MLTrainingFlow: {e}"
+            + (f"\n\nInvestigation Results:\n{investigation_text}" if investigation_text else "")
+        )
 
 
 def run_llm_training_flow(
@@ -160,31 +184,41 @@ def run_llm_training_flow(
         flow_args["reward_template"] = reward_template
 
     try:
-        with Runner("src/flows/llm_training_flow.py", show_output=False).run(
-            **flow_args
-        ) as running:
-            if wait_for_completion and running.status == "failed":
-                error_details = running.stderr or "No stderr available"
-                
-                tb_str = f"LLMTrainingFlow failed: {error_details}"
-                _investigate_training_error(
-                    error=RuntimeError(error_details),
-                    tb_str=tb_str,
-                    task_type="llm_training",
-                    flow_name="LLMTrainingFlow",
-                    flow_args=flow_args,
-                )
-                
-                raise RuntimeError(f"Flow failed: {error_details}")
+        with langfuse_trace("run_llm_training_flow", input=flow_args) as trace:
+            with Runner("src/flows/llm_training_flow.py", show_output=False).run(
+                **flow_args
+            ) as running:
+                if wait_for_completion and running.status == "failed":
+                    error_details = running.stderr or "No stderr available"
 
-            return f"{running.run.pathspec}"
+                    tb_str = f"LLMTrainingFlow failed: {error_details}"
+                    investigation_text = _investigate_training_error(
+                        error=RuntimeError(error_details),
+                        tb_str=tb_str,
+                        task_type="llm_training",
+                        flow_name="LLMTrainingFlow",
+                        flow_args=flow_args,
+                    )
+
+                    if trace:
+                        trace.update(output={"status": "failed", "error": error_details[:500]})
+
+                    raise RuntimeError(
+                        f"Flow failed: {error_details}"
+                        + (f"\n\nInvestigation Results:\n{investigation_text}" if investigation_text else "")
+                    )
+
+                pathspec = f"{running.run.pathspec}"
+                if trace:
+                    trace.update(output={"status": "completed", "run_id": pathspec})
+                return pathspec
             
     except RuntimeError:
         raise
     except Exception as e:
         tb_str = traceback.format_exc()
         
-        _investigate_training_error(
+        investigation_text = _investigate_training_error(
             error=e,
             tb_str=tb_str,
             task_type="llm_training",
@@ -192,11 +226,14 @@ def run_llm_training_flow(
             flow_args=flow_args,
         )
         
-        raise RuntimeError(f"Failed to execute LLMTrainingFlow: {e}")
+        raise RuntimeError(
+            f"Failed to execute LLMTrainingFlow: {e}"
+            + (f"\n\nInvestigation Results:\n{investigation_text}" if investigation_text else "")
+        )
 
 
 def get_flow_artifacts(run_id: str) -> dict:
-    """Get artifacts from a completed flow run.
+    """Get artifacts from a completed flow run using the Metaflow Python API.
 
     Args:
         run_id: Flow run ID (e.g., "MLTrainingFlow/123")
@@ -211,8 +248,7 @@ def get_flow_artifacts(run_id: str) -> dict:
         KeyError: If run ID is invalid
         ValueError: If required artifacts are missing
     """
-    import json
-    from pathlib import Path
+    from metaflow import Flow
 
     # Parse run_id: "FlowName/run_number" or full pathspec
     parts = run_id.split("/")
@@ -222,131 +258,35 @@ def get_flow_artifacts(run_id: str) -> dict:
     flow_name = parts[0]
     run_number = str(parts[-1])
 
-    # Determine model path based on flow type
-    current_dir = Path(__file__).parent.parent.parent
-    model_base_dir = current_dir / "models"
-    
+    try:
+        flow = Flow(flow_name)
+        run = flow[run_number]
+    except KeyError:
+        raise ValueError(f"Run not found: {flow_name}/{run_number}")
+
+    # Read artifacts from the end step (has all accumulated self.* attributes)
+    try:
+        end_task = run["end"].task
+        data = end_task.data
+    except Exception as e:
+        raise ValueError(f"Could not read artifacts from run {run_id}: {e}")
+
     artifacts = {}
-    
+
     if flow_name == "MLTrainingFlow":
-        # Try to determine task type from model directories
-        # The model is saved to models/automl_{task_type}/{run_id}
-        
-        # Check both classification and regression
-        for task_type in ["classification", "regression"]:
-            model_dir = model_base_dir / f"automl_{task_type}" / run_number
-            if model_dir.exists():
-                artifacts["model_path"] = str(model_dir)
-                artifacts["task_type"] = task_type
-                break
-        
-        # If not found by directory, construct path based on flow name pattern
-        if "model_path" not in artifacts:
-            # Default to classification based on common usage
-            artifacts["model_path"] = str(model_base_dir / "automl_classification" / run_number)
-            artifacts["task_type"] = "classification"
-        
-        # Try to read metrics from the metaflow run directory
-        metaflow_dir = current_dir / ".metaflow"
-        run_path = metaflow_dir / flow_name / run_number
-        
-        # Look for metrics in any step
-        metrics = {}
-        for step_name in ["save_model", "end", "evaluate", "train_model"]:
-            step_path = run_path / step_name
-            if step_path.exists():
-                for task_dir in step_path.iterdir():
-                    if task_dir.is_dir() and task_dir.name.isdigit():
-                        meta_path = task_dir / "_meta" / "0_artifact_metrics.json"
-                        if meta_path.exists():
-                            try:
-                                with open(meta_path) as f:
-                                    data = json.load(f)
-                                    metrics = data.get("value", {})
-                                    break
-                            except Exception:
-                                pass
-        
-        artifacts["metrics"] = metrics
-        
+        artifacts["model_path"] = getattr(data, "model_path", "")
+        artifacts["task_type"] = getattr(data, "task_type", "classification")
+        artifacts["metrics"] = getattr(data, "metrics", {})
+
     elif flow_name == "LLMTrainingFlow":
-        # For LLM flows, model is saved to models/llm_{method}/{run_id}
-        # Try to determine method from directories
-        
-        artifacts["training_method"] = "SFT"  # Default
-        
-        for method in ["sft", "dpo", "grpo"]:
-            try:
-                model_dir = model_base_dir / f"llm_{method}" / run_number
-                if model_dir.exists():
-                    artifacts["model_path"] = str(model_dir)
-                    artifacts["training_method"] = method.upper()
-                    break
-            except Exception:
-                pass
-            
-            try:
-                # Also check without prefix
-                adapter_dir = model_base_dir / f"{method}_adapter" / run_number
-                if adapter_dir.exists():
-                    artifacts["model_path"] = str(adapter_dir)
-                    artifacts["training_method"] = method.upper()
-                    break
-            except Exception:
-                pass
-        
-        if "model_path" not in artifacts:
-            # Default to sft
-            try:
-                artifacts["model_path"] = str(model_base_dir / "llm_sft" / run_number)
-            except Exception:
-                artifacts["model_path"] = f"models/llm_sft/{run_number}"
-        
-        # Read base_model from metaflow if available (may fail due to permissions)
-        metaflow_dir = current_dir / ".metaflow"
-        run_path = metaflow_dir / flow_name / run_number
-        
-        artifacts["base_model"] = ""
-        artifacts["metrics"] = {}
-        
-        try:
-            for step_name in ["end", "train_model", "evaluate"]:
-                step_path = run_path / step_name
-                if not step_path.exists():
-                    continue
-                for task_dir in step_path.iterdir():
-                    if not task_dir.is_dir() or not task_dir.name.isdigit():
-                        continue
-                    
-                    try:
-                        base_model_path = task_dir / "_meta" / "0_artifact_base_model.json"
-                        if base_model_path.exists():
-                            with open(base_model_path) as f:
-                                data = json.load(f)
-                                artifacts["base_model"] = data.get("value", "")
-                    except Exception:
-                        pass
-                    
-                    try:
-                        metrics_path = task_dir / "_meta" / "0_artifact_metrics.json"
-                        if metrics_path.exists():
-                            with open(metrics_path) as f:
-                                data = json.load(f)
-                                artifacts["metrics"] = data.get("value", {})
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-    
-    # Validate we have at least the model_path
+        artifacts["model_path"] = getattr(data, "model_path", "")
+        artifacts["training_method"] = getattr(data, "training_method", "SFT")
+        artifacts["base_model"] = getattr(data, "base_model", "")
+        artifacts["metrics"] = getattr(data, "metrics", {})
+
     if not artifacts.get("model_path"):
         raise ValueError(f"Model not found for run {flow_name}/{run_number}")
-    
-    # Check if model path exists (be lenient - directory may exist but be empty)
-    model_path = Path(artifacts["model_path"])
-    if not model_path.exists():
-        logger.warning(f"Model directory not found: {artifacts['model_path']}, but returning path anyway")
-    
+
     return artifacts
 
 

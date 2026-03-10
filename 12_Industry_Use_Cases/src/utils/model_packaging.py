@@ -38,6 +38,8 @@ class SklearnModelMetadata:
 
     pipeline_steps: list[dict] = field(default_factory=list)
 
+    categorical_columns: list[str] = field(default_factory=list)
+
     file_hash: str = ""
     file_size_mb: float = 0.0
 
@@ -82,6 +84,7 @@ def save_sklearn_model_package(
     task_type: str = "classification",
     target_column: str = "",
     feature_columns: Optional[list[str]] = None,
+    categorical_columns: Optional[list[str]] = None,
     metrics: Optional[dict] = None,
     description: str = "",
 ) -> str:
@@ -144,6 +147,7 @@ def save_sklearn_model_package(
         task_type=task_type,
         target_column=target_column,
         feature_columns=feature_columns or [],
+        categorical_columns=categorical_columns or [],
         metrics=metrics or {},
         pipeline_steps=pipeline_steps,
         file_hash=file_hash,
@@ -236,6 +240,7 @@ def save_lora_adapter_package(
     lora_config=None,
     training_args: Optional[dict] = None,
     metrics: Optional[dict] = None,
+    adapter_path: Optional[str] = None,
 ) -> str:
     """Save LoRA adapter with complete metadata for inference.
 
@@ -255,12 +260,19 @@ def save_lora_adapter_package(
     import torch
     import transformers
     import peft
+    import shutil
 
     save_path = Path(output_dir) / model_name / version
     save_path.mkdir(parents=True, exist_ok=True)
 
-    model.save_pretrained(save_path)
-    tokenizer.save_pretrained(save_path)
+    if adapter_path and model is None:
+        src_path = Path(adapter_path)
+        for file in src_path.glob("*"):
+            if file.is_file() and not file.name.startswith("."):
+                shutil.copy2(file, save_path / file.name)
+    else:
+        model.save_pretrained(save_path)
+        tokenizer.save_pretrained(save_path)
 
     adapter_file = save_path / "adapter_model.safetensors"
     if not adapter_file.exists():
@@ -394,10 +406,9 @@ def create_downloadable_zip(model_dir: str, output_path: Optional[str] = None) -
     model_path = Path(model_dir)
 
     if not output_path:
-        output_path = f"{model_path.name}.zip"
+        output_path = model_path.name
 
-    zip_path = Path(output_path)
+    # make_archive appends .zip automatically
+    archive_path = shutil.make_archive(output_path, "zip", model_path.parent, model_path.name)
 
-    shutil.make_archive(str(zip_path.with_suffix("")), "zip", model_path.parent, model_path.name)
-
-    return str(zip_path) + ".zip"
+    return archive_path

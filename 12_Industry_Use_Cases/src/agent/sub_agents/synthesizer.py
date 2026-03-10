@@ -1,8 +1,7 @@
 """Recommendation Synthesizer Agent - Combines findings into actionable advice."""
 
-from langchain.chat_models import init_chat_model
-
 from src.config import settings
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call
 
 
 SYNTHESIZER_PROMPT = """You are an expert ML engineer providing debug recommendations for a specific hardware setup.
@@ -69,24 +68,27 @@ def synthesizer_node(state: dict) -> dict:
             context_str += f"Resolution: {past.get('recommendation', 'N/A')[:300]}...\n"
     
     try:
-        model = init_chat_model(
-            "openai/gpt-oss-120b",
-            model_provider="openai",
-            config={
-                "base_url": settings.LLM_INFERENCE_URL,
-                "api_key": settings.LLM_INFERENCE_KEY,
-                "temperature": 0.3,
-            },
-        )
-        
-        prompt = SYNTHESIZER_PROMPT.format(
-            error_context=context_str,
-            search_summary=search_summary,
-            fetched_docs=docs_str
-        )
-        
-        response = model.invoke(prompt)
-        recommendation = response.content.strip()
+        with langfuse_trace("synthesis", input={"error_type": error_context.get("error_type"), "search_results_count": len(search_results), "fetched_docs_count": len(fetched_docs)}) as trace:
+            from langchain.chat_models import init_chat_model
+            model = init_chat_model(
+                settings.LLM_MODEL_NAME,
+                model_provider="openai",
+                base_url=settings.LLM_INFERENCE_URL,
+                api_key=settings.LLM_INFERENCE_KEY,
+                temperature=0.3,
+            )
+
+            prompt = SYNTHESIZER_PROMPT.format(
+                error_context=context_str,
+                search_summary=search_summary,
+                fetched_docs=docs_str
+            )
+
+            response = model.invoke(prompt)
+            recommendation = response.content.strip()
+            trace_llm_call(trace, "synthesize_recommendation", prompt, recommendation, settings.LLM_MODEL_NAME)
+            if trace:
+                trace.update(output={"recommendation": recommendation})
         
         confidence_level = _assess_confidence(error_context, search_results, fetched_docs)
         

@@ -5,7 +5,6 @@ from typing import Any
 
 import pandas as pd
 from datasets import Dataset
-from langfuse import get_client
 from ragas import evaluate
 from ragas.metrics import faithfulness, context_precision, context_recall
 from ragas.run_config import RunConfig
@@ -16,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config import settings
 from src.retrieval.embeddings import embed_query, get_embedding_model
 from src.retrieval.qdrant_client import QdrantRetriever
+from src.utils.langfuse_client import langfuse_trace
 
 
 class RAGASEvaluator:
@@ -28,7 +28,6 @@ class RAGASEvaluator:
         self.comparison_results = {}
         self.llm_available = False
         self._setup_ragas_llm()
-        self._setup_langfuse()
 
     def _setup_ragas_llm(self) -> None:
         """Configure RAGAS to use local LLM server instead of OpenAI."""
@@ -37,7 +36,7 @@ class RAGASEvaluator:
             from ragas.llms import LangchainLLMWrapper
             
             self.llm = ChatOpenAI(
-                model=settings.DEFAULT_BASE_MODEL,
+                model=settings.LLM_MODEL_NAME,
                 base_url=settings.LLM_INFERENCE_URL,
                 api_key=settings.LLM_INFERENCE_KEY,
             )
@@ -52,16 +51,6 @@ class RAGASEvaluator:
             self.llm = None
             self.ragas_llm = None
             self.llm_available = False
-
-    def _setup_langfuse(self) -> None:
-        """Initialize LangFuse client for score tracking."""
-        try:
-            self.langfuse = get_client()
-            self.langfuse_available = True
-        except Exception as e:
-            print(f"Warning: LangFuse client not available. Error: {e}")
-            self.langfuse = None
-            self.langfuse_available = False
 
     def retrieve_context(self, question: str, limit: int = 5) -> list[str]:
         """Retrieve relevant context for a question."""
@@ -159,14 +148,6 @@ class RAGASEvaluator:
 
         summary = self._create_comparison_summary(comparison_results)
 
-        if self.langfuse_available and self.langfuse:
-            with self.langfuse.start_as_current_observation(as_type="span", name="retrieval_comparison") as span:
-                for method in methods:
-                    avg_scores = comparison_results[method].get("average_scores", {})
-                    for metric_name, score in avg_scores.items():
-                        span.score(name=f"{method}_{metric_name}", value=score, data_type="NUMERIC")
-            self.langfuse.flush()
-
         return {
             "comparison": comparison_results,
             "summary": summary,
@@ -194,15 +175,24 @@ class RAGASEvaluator:
         return summary
 
     def generate_response(self, question: str, context: list[str]) -> str:
-        """Generate response using retrieved context."""
+        """Generate response using retrieved context.
+
+        Raises RuntimeError if the LLM is unavailable, since a canned fallback
+        response would produce meaningless RAGAS scores.
+        """
         if not context:
-            return "Unable to find relevant information in the knowledge base."
+            raise ValueError("No relevant context retrieved for the question. "
+                           "Ensure the knowledge base is indexed.")
 
         context_text = "\n".join([f"- {c[:200]}..." if len(c) > 200 else f"- {c}" for c in context])
-        
-        if self.llm_available:
-            try:
-                prompt = f"""Based on the following context, answer the question concisely.
+
+        if not self.llm_available:
+            raise RuntimeError(
+                f"LLM server not available at {settings.LLM_INFERENCE_URL}. "
+                "Cannot generate responses for RAGAS evaluation without a working LLM."
+            )
+
+        prompt = f"""Based on the following context, answer the question concisely.
 
 Context:
 {context_text}
@@ -210,159 +200,126 @@ Context:
 Question: {question}
 
 Answer:"""
-                
-                response = self.llm.invoke(prompt)
-                return response.content
-            except Exception as e:
-                print(f"Warning: LLM call failed, using fallback: {e}")
-        
-        return f"""Based on the available information:
 
-{context_text}
-
-Answer: This question can be addressed using scikit-learn based on the retrieved documentation."""
+        response = self.llm.invoke(prompt)
+        return response.content
 
     def _extract_metric_value(self, result, metric_name: str) -> float:
         """Extract a single numeric value from RAGAS EvaluationResult, handling various formats.
-        
+
         Args:
             result: Either a dict, EvaluationResult object, or pandas DataFrame
             metric_name: Name of the metric to extract (e.g., 'faithfulness')
-        
+
         Returns:
             float: The extracted score value
+
+        Raises:
+            ValueError: If the metric cannot be extracted from the result.
         """
-        try:
-            if hasattr(result, 'scores'):
-                value = result.scores[0].get(metric_name)
-            elif hasattr(result, 'to_pandas'):
-                df = result.to_pandas()
-                if metric_name in df.columns:
-                    value = df[metric_name].iloc[0]
-                else:
-                    return 0.0
-            elif isinstance(result, dict):
-                value = result.get(metric_name)
-            else:
-                return 0.0
-            
-            if value is None:
-                return 0.0
-            
-            if isinstance(value, (int, float)):
-                return float(value)
-            
-            if hasattr(value, 'item'):
-                return float(value.item())
-            
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                return 0.0
-        except Exception as e:
-            warnings.warn(f"Failed to extract metric '{metric_name}': {e}", stacklevel=2)
-            return 0.0
+        value = None
 
-    def _submit_langfuse_scores(
-        self,
-        span,
-        faithfulness: float,
-        context_precision: float,
-        context_recall: float,
-    ) -> None:
-        """Submit RAGAS scores to LangFuse span."""
-        if not span:
-            return
+        if hasattr(result, 'scores'):
+            value = result.scores[0].get(metric_name)
+        elif hasattr(result, 'to_pandas'):
+            df = result.to_pandas()
+            if metric_name in df.columns:
+                value = df[metric_name].iloc[0]
+        elif isinstance(result, dict):
+            value = result.get(metric_name)
 
-        try:
-            span.score(name="faithfulness", value=faithfulness, data_type="NUMERIC")
-            span.score(name="context_precision", value=context_precision, data_type="NUMERIC")
-            span.score(name="context_recall", value=context_recall, data_type="NUMERIC")
-        except Exception as e:
-            print(f"Warning: Failed to submit LangFuse scores. Error: {e}")
+        if value is None:
+            raise ValueError(
+                f"Could not extract metric '{metric_name}' from RAGAS result. "
+                f"Result type: {type(result).__name__}. "
+                f"Available: {list(result.keys()) if isinstance(result, dict) else 'unknown'}"
+            )
+
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if hasattr(value, 'item'):
+            return float(value.item())
+
+        return float(value)
 
     def evaluate_single(
         self, question: str, ground_truth: str = None
     ) -> dict[str, Any]:
-        """Evaluate a single question-answer pair."""
-        contexts = self.retrieve_context(question)
-        answer = self.generate_response(question, contexts)
+        """Evaluate a single question-answer pair.
 
-        data_dict = {
-            "question": [question],
-            "answer": [answer],
-            "contexts": [contexts],
-        }
+        Raises an error if the LLM is unavailable or RAGAS evaluation fails,
+        rather than silently returning fake 0.5 scores.
+        """
 
-        if ground_truth:
-            data_dict["ground_truth"] = [ground_truth]
+        with langfuse_trace("ragas_single_evaluation", metadata={"retrieval_method": self.retrieval_method}, input={"question": question, "ground_truth": ground_truth}) as span:
+            contexts = self.retrieve_context(question)
+            answer = self.generate_response(question, contexts)
 
-        dataset = Dataset.from_dict(data_dict)
-
-        faithfulness_score = 0.5
-        context_precision_score = 0.5
-        context_recall_score = 0.5 if ground_truth else 0.0
-
-        if self.llm_available and self.ragas_llm:
-            try:
-                metrics = [faithfulness, context_precision, context_recall]
-                for metric in metrics:
-                    metric.llm = self.ragas_llm
-
-                run_config = RunConfig(
-                    timeout=300,
-                    max_retries=3,
-                    max_wait=30
+            if not self.llm_available or not self.ragas_llm:
+                raise RuntimeError(
+                    f"LLM server not available at {settings.LLM_INFERENCE_URL}. "
+                    "RAGAS evaluation requires a working LLM to score faithfulness, "
+                    "context precision, and context recall. Please ensure the LLM "
+                    "inference server is running."
                 )
 
-                result = evaluate(
-                    dataset=dataset,
-                    metrics=metrics,
-                    run_config=run_config
-                )
+            data_dict = {
+                "question": [question],
+                "answer": [answer],
+                "contexts": [contexts],
+            }
 
-                faithfulness_score = self._extract_metric_value(result, "faithfulness")
-                context_precision_score = self._extract_metric_value(result, "context_precision")
-                context_recall_score = self._extract_metric_value(result, "context_recall")
+            if ground_truth:
+                data_dict["ground_truth"] = [ground_truth]
 
-            except TimeoutError as e:
-                warnings.warn(
-                    f"RAGAS evaluation timed out for question: {question[:50]}... "
-                    f"Using default scores. Error: {e}",
-                    stacklevel=2
-                )
-            except Exception as e:
-                warnings.warn(
-                    f"RAGAS evaluation failed for question: {question[:50]}... "
-                    f"Using default scores. Error: {e}",
-                    stacklevel=2
-                )
+            dataset = Dataset.from_dict(data_dict)
 
-        if self.langfuse_available and self.langfuse:
-            with self.langfuse.start_as_current_observation(as_type="span", name="single_evaluation") as span:
-                span.update(input=question, output=answer)
-                self._submit_langfuse_scores(
-                    span,
-                    faithfulness_score,
-                    context_precision_score,
-                    context_recall_score,
-                )
-            self.langfuse.flush()
+            metrics = [faithfulness, context_precision, context_recall]
+            for metric in metrics:
+                metric.llm = self.ragas_llm
 
-        return {
-            "question": question,
-            "answer": answer,
-            "ground_truth": ground_truth,
-            "contexts": contexts,
-            "faithfulness": faithfulness_score,
-            "context_precision": context_precision_score,
-            "context_recall": context_recall_score,
-        }
+            run_config = RunConfig(
+                timeout=300,
+                max_retries=3,
+                max_wait=30
+            )
+
+            result = evaluate(
+                dataset=dataset,
+                metrics=metrics,
+                run_config=run_config
+            )
+
+            faithfulness_score = self._extract_metric_value(result, "faithfulness")
+            context_precision_score = self._extract_metric_value(result, "context_precision")
+            context_recall_score = self._extract_metric_value(result, "context_recall")
+
+            scores = {
+                "faithfulness": faithfulness_score,
+                "context_precision": context_precision_score,
+                "context_recall": context_recall_score,
+            }
+
+            # Update span with output scores and report scores to Langfuse
+            if span is not None:
+                span.update(output={"answer": answer, "scores": scores, "num_contexts": len(contexts)})
+                for metric_name, metric_value in scores.items():
+                    span.score(name=metric_name, value=metric_value, data_type="NUMERIC")
+
+            return {
+                "question": question,
+                "answer": answer,
+                "ground_truth": ground_truth,
+                "contexts": contexts,
+                **scores,
+            }
 
     def evaluate_dataset(
         self, dataset_path: str = None
     ) -> dict[str, Any]:
         """Evaluate a full test dataset."""
+
         if dataset_path is None:
             dataset_path = os.path.join(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -377,44 +334,65 @@ Answer: This question can be addressed using scikit-learn based on the retrieved
             for line in f:
                 test_data.append(json.loads(line.strip()))
 
-        results = []
-        for item in test_data:
-            question = item["question"]
-            ground_truth = item.get("ground_truth")
-            
-            try:
-                result = self.evaluate_single(question, ground_truth)
-                results.append(result)
-            except Exception as e:
-                print(f"Error evaluating question: {question[:50]}... - {e}")
+        questions = [item["question"] for item in test_data]
 
-        if not results:
-            return {"error": "No evaluations completed successfully"}
+        with langfuse_trace(
+            "ragas_dataset_evaluation",
+            metadata={"dataset_path": dataset_path, "retrieval_method": self.retrieval_method},
+            input={"questions": questions, "retrieval_method": self.retrieval_method, "total_questions": len(test_data)},
+        ) as span:
+            results = []
+            for item in test_data:
+                question = item["question"]
+                ground_truth = item.get("ground_truth")
 
-        avg_scores = {
-            "faithfulness": sum(r["faithfulness"] for r in results) / len(results),
-            "context_precision": sum(r["context_precision"] for r in results) / len(results),
-            "context_recall": sum(r["context_recall"] for r in results) / len(results),
-        }
+                try:
+                    result = self.evaluate_single(question, ground_truth)
+                    results.append(result)
+                except Exception as e:
+                    print(f"Error evaluating question: {question[:50]}... - {e}")
 
-        if self.langfuse_available and self.langfuse:
-            with self.langfuse.start_as_current_observation(as_type="span", name="dataset_evaluation") as span:
-                span.update(
-                    input=f"{len(results)} questions evaluated",
-                    output=f"method: {self.retrieval_method}",
-                    metadata={"retrieval_method": self.retrieval_method}
-                )
-                span.score(name="avg_faithfulness", value=avg_scores["faithfulness"], data_type="NUMERIC")
-                span.score(name="avg_context_precision", value=avg_scores["context_precision"], data_type="NUMERIC")
-                span.score(name="avg_context_recall", value=avg_scores["context_recall"], data_type="NUMERIC")
-            self.langfuse.flush()
+            if not results:
+                return {"error": "No evaluations completed successfully"}
 
-        return {
-            "individual_results": results,
-            "average_scores": avg_scores,
-            "total_evaluated": len(results),
-            "retrieval_method": self.retrieval_method,
-        }
+            avg_scores = {
+                "faithfulness": sum(r["faithfulness"] for r in results) / len(results),
+                "context_precision": sum(r["context_precision"] for r in results) / len(results),
+                "context_recall": sum(r["context_recall"] for r in results) / len(results),
+            }
+
+            per_question_scores = [
+                {
+                    "question": r["question"],
+                    "faithfulness": r["faithfulness"],
+                    "context_precision": r["context_precision"],
+                    "context_recall": r["context_recall"],
+                }
+                for r in results
+            ]
+
+            # Set output on the trace with both per-question and average scores
+            if span is not None:
+                span.update(output={
+                    "average_scores": avg_scores,
+                    "per_question_scores": per_question_scores,
+                    "total_evaluated": len(results),
+                })
+                # Report average scores to the Langfuse trace
+                for metric_name, metric_value in avg_scores.items():
+                    span.score_trace(
+                        name=f"ragas_{metric_name}",
+                        value=metric_value,
+                        data_type="NUMERIC",
+                        comment=f"Average {metric_name} over {len(results)} questions ({self.retrieval_method} retrieval)",
+                    )
+
+            return {
+                "individual_results": results,
+                "average_scores": avg_scores,
+                "total_evaluated": len(results),
+                "retrieval_method": self.retrieval_method,
+            }
 
     def results_to_dataframe(self, results: dict[str, Any]) -> pd.DataFrame:
         """Convert evaluation results to a tidy pandas DataFrame."""
