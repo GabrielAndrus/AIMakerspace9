@@ -41,7 +41,7 @@ def search_executor_node(state: dict) -> dict:
             current_result = {}
             
             for line in lines:
-                if line.startswith(f"{search_results.count() + 1}. "):
+                if line.startswith(f"{len(search_results) + 1}. "):
                     if current_result:
                         search_results.append(current_result)
                     current_result = {"title": line.split(".", 2)[2].strip()}

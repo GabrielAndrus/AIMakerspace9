@@ -6,8 +6,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 os.environ.setdefault("HF_HOME", "/root/.cache/huggingface")
-if token := os.environ.get("HF_TOKEN"):
-    os.environ["HF_TOKEN"] = token
 
 
 @dataclass(frozen=True)
@@ -27,8 +25,10 @@ class Settings:
     LANGFUSE_PUBLIC_KEY: str = os.environ.get("LANGFUSE_PUBLIC_KEY", "")
     LANGFUSE_SECRET_KEY: str = os.environ.get("LANGFUSE_SECRET_KEY", "")
 
-    LLM_INFERENCE_URL: str = os.environ.get("LLM_INFERENCE_URL", "http://192.168.1.185:8080/v1")
+    LLM_INFERENCE_URL: str = os.environ.get("LLM_INFERENCE_URL", "http://192.168.1.79:8080/v1")
     LLM_INFERENCE_KEY: str = os.environ.get("LLM_INFERENCE_KEY", "not-needed")
+    LLM_MODEL_NAME: str = os.environ.get("LLM_MODEL_NAME", "minimax-m2.5-mlx@8bit")
+    SEARXNG_URL: str = os.environ.get("SEARXNG_URL", "http://192.168.1.36:4000")
 
     DEFAULT_BASE_MODEL: str = os.environ.get("DEFAULT_BASE_MODEL", "Qwen/Qwen2.5-0.5B")
     MAX_SEQ_LENGTH: int = 2048

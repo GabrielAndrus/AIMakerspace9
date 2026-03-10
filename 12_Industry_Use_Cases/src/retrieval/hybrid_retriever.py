@@ -12,6 +12,8 @@ meaning and exact keyword matches, which is crucial for technical queries involv
 specific AutoML terminology, configuration parameters, and error messages.
 """
 
+from src.utils.langfuse_client import get_langfuse_client
+
 
 class BM25Retriever:
     """Sparse retrieval using BM25 keyword matching."""
@@ -144,12 +146,18 @@ class HybridRetriever:
         if not self.indexed:
             raise ValueError("Index not built. Call build_index() first.")
 
+        trace = get_langfuse_client().start_span(name="hybrid_search", input={"query": query, "method": method, "limit": limit})
+
         if method == "dense":
             from src.retrieval.embeddings import embed_query
+            span = trace.start_span(name="dense_only")
             query_embedding = embed_query(query)
             results = self.qdrant_retriever.search(query_embedding, limit=limit)
+            span.update(output={"num_results": len(results)})
+            span.end()
 
         elif method == "sparse":
+            span = trace.start_span(name="sparse_only")
             sparse_results = self.bm25.search(query, top_k=limit * 2)
             results = []
             for doc_idx, score in sparse_results[:limit]:
@@ -164,25 +172,31 @@ class HybridRetriever:
                         "source": doc.get("source", ""),
                     },
                 })
+            span.update(output={"num_results": len(results)})
+            span.end()
 
         elif method == "hybrid":
             from src.retrieval.embeddings import embed_query
             query_embedding = embed_query(query)
 
+            dense_span = trace.start_span(name="dense_retrieval")
             dense_results_full = self.qdrant_retriever.search(query_embedding, limit=limit * 2)
             dense_results = []
-
             doc_id_to_idx = {str(doc["id"]): i for i, doc in enumerate(self.documents)}
-
             for hit in dense_results_full:
                 if str(hit["id"]) in doc_id_to_idx:
                     doc_idx = doc_id_to_idx[str(hit["id"])]
                     dense_results.append((doc_idx, hit["score"]))
+            dense_span.update(output={"num_results": len(dense_results)})
+            dense_span.end()
 
+            sparse_span = trace.start_span(name="sparse_retrieval")
             sparse_results = self.bm25.search(query, top_k=limit * 2)
+            sparse_span.update(output={"num_results": len(sparse_results)})
+            sparse_span.end()
 
+            fusion_span = trace.start_span(name="rrf_fusion")
             fused_results = self.reciprocal_rank_fusion(dense_results, sparse_results)
-
             results = []
             for doc_idx, score in fused_results[:limit]:
                 doc = self.documents[doc_idx]
@@ -196,8 +210,12 @@ class HybridRetriever:
                         "source": doc.get("source", ""),
                     },
                 })
+            fusion_span.update(output={"num_results": len(results)})
+            fusion_span.end()
 
         else:
             raise ValueError(f"Unknown method: {method}. Use 'dense', 'sparse', or 'hybrid'.")
 
+        trace.update(output={"num_results": len(results)})
+        trace.end()
         return results

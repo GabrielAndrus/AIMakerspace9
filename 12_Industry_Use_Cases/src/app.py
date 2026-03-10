@@ -1,6 +1,8 @@
 import json
 import os
 import traceback
+import typing
+from pathlib import Path
 from typing import Generator, Optional
 
 import gradio as gr
@@ -11,7 +13,14 @@ from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 
 from src.config import settings
+
+# Metaflow's vendored typing_extensions monkey-patches typing._collect_parameters,
+# which breaks langsmith's class definitions (used transitively by langgraph).
+# Save the original and restore it after metaflow imports.
+_original_collect_parameters = typing._collect_parameters
 from src.flows.runner import get_flow_artifacts, run_llm_training_flow, run_ml_training_flow
+from src.flows.runner import _investigate_training_error
+typing._collect_parameters = _original_collect_parameters
 from src.ml.auto_ensemble import evaluate_model, train_ensemble
 from src.ml.data_validator import detect_task_type, get_column_types, validate_csv
 from src.job_queue.job_manager import JobManager
@@ -88,15 +97,63 @@ def create_sample_csv() -> str:
 
 
 def format_error_html(message: str) -> str:
-    return f'<div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #991b1b;">{message}</div>'
+    return f'<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #991b1b !important;">{message}</div>'
 
 
 def format_warning_html(message: str) -> str:
-    return f'<div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; color: #92400e;">{message}</div>'
+    return f'<div style="background-color: #fef3c7 !important; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; color: #92400e !important;">{message}</div>'
 
 
 def format_success_html(message: str) -> str:
-    return f'<div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 12px; border-radius: 4px; color: #065f46;">{message}</div>'
+    return f'<div style="background-color: #d1fae5 !important; border-left: 4px solid #10b981; padding: 12px; border-radius: 4px; color: #065f46 !important;">{message}</div>'
+
+
+def _run_error_investigation(error, tb_str, task_type, flow_name, flow_args, data_path=None):
+    """Run the error investigator and return the investigation text."""
+    try:
+        from src.agent.error_investigator import investigate_error
+        import traceback as tb_module
+        results = []
+        for msg in investigate_error(
+            error=error,
+            traceback_str=tb_str,
+            task_type=task_type,
+            flow_name=flow_name,
+            flow_args=flow_args,
+            data_path=data_path or flow_args.get("data_path"),
+            training_method=flow_args.get("training_method"),
+            base_model=flow_args.get("base_model"),
+        ):
+            results.append(msg)
+        return "\n".join(results)
+    except Exception as inv_err:
+        import traceback as tb_module
+        inv_tb = tb_module.format_exc()
+        print(f"[ErrorInvestigation] Investigation failed: {inv_err}\n{inv_tb}")
+        return f"Error investigation failed: {inv_err}\n\nInvestigation traceback:\n{inv_tb}"
+
+
+def _build_error_html(user_message, investigation_text, tb_str):
+    """Build a consistent error HTML block with investigation results and traceback."""
+    return f"""
+<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; color: #991b1b !important;">
+    <h3 style="color: #991b1b !important;">Training Failed</h3>
+    <p style="color: #991b1b !important;">{user_message.replace(chr(10), '<br>')}</p>
+    {f'''
+    <hr style="margin: 12px 0;">
+    <details open>
+        <summary style="cursor: pointer; font-weight: bold; color: #991b1b !important;">🔍 Error Investigation Results</summary>
+        <div style="background-color: #f3f4f6 !important; padding: 12px; margin-top: 8px; border-radius: 4px;">
+            <pre style="white-space: pre-wrap; word-wrap: break-word; color: #1f2937 !important; background-color: #f3f4f6 !important;">{investigation_text}</pre>
+        </div>
+    </details>
+    ''' if investigation_text else ''}
+    <hr style="margin: 12px 0;">
+    <details>
+        <summary style="cursor: pointer; color: #991b1b !important;">View Technical Details</summary>
+        <pre style="background-color: #f3f4f6 !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #1f2937 !important;">{tb_str}</pre>
+    </details>
+</div>"""
 
 
 def handle_csv_upload(
@@ -212,9 +269,9 @@ def train_tabular_model(
             gr.File(),
             "",
             "",
-            "",
+            {},
             gr.Plot(),
-            gr.Dataframe(value=None),
+            gr.Plot(),
             "",
         )
 
@@ -224,9 +281,9 @@ def train_tabular_model(
             gr.File(),
             "",
             "",
-            "",
+            {},
             gr.Plot(),
-            gr.Dataframe(value=None),
+            gr.Plot(),
             "",
         )
 
@@ -234,14 +291,28 @@ def train_tabular_model(
 
     result = validate_csv(filepath, target_column)
     if not result["valid"]:
+        investigation_text = _run_error_investigation(
+            error=ValueError(result["message"]),
+            tb_str=result["message"],
+            task_type="data_validation",
+            flow_name="MLTrainingFlow",
+            flow_args={"data_path": filepath, "target_column": target_column},
+        )
+
+        error_html = _build_error_html(
+            f"Data Validation Failed: {result['message']}",
+            investigation_text,
+            result["message"],
+        )
+
         return (
-            format_error_html(result["message"]),
+            error_html,
             gr.File(),
             "",
             "",
-            "",
+            {},
             gr.Plot(),
-            gr.Dataframe(value=None),
+            gr.Plot(),
             "",
         )
 
@@ -252,9 +323,6 @@ def train_tabular_model(
     task_type = detect_task_type(y)
 
     progress(0.25, desc="[3/5] Submitting to Metaflow...")
-    
-    print(f"[DEBUG] train_tabular_model called with filepath={filepath}, target_column={target_column}")
-    print(f"[DEBUG] File exists: {os.path.exists(filepath)}")
 
     job_id = job_manager.submit_job(
         job_type="ml_training",
@@ -264,14 +332,11 @@ def train_tabular_model(
             "task_type": task_type,
         },
     )
-    
-    print(f"[DEBUG] Job submitted: {job_id}")
 
     progress(0.35, desc="[4/5] Training via Metaflow flow...")
 
     try:
         job_manager.start_job(job_id)
-        print(f"[DEBUG] Starting Metaflow run...")
 
         # Run ML training via Metaflow
         run_id = run_ml_training_flow(
@@ -281,18 +346,11 @@ def train_tabular_model(
         )
 
         # Get artifacts from the completed run
-        print(f"[DEBUG] Getting flow artifacts for run_id: {run_id}")
         training_result = get_flow_artifacts(run_id)
         
-        print(f"[DEBUG] Training result keys: {training_result.keys()}")
-        
         model_path = training_result["model_path"]
-        print(f"[DEBUG] model_path from flow: '{model_path}'")
-        
         task_type = training_result.get("task_type", "unknown")
         metrics = training_result["metrics"]
-        
-        print(f"[DEBUG] Final model_path: '{model_path}', exists: {os.path.exists(model_path)}")
 
         if not os.path.isdir(model_path):
             raise ValueError(f"model_path is not a valid directory: {model_path}")
@@ -315,28 +373,43 @@ def train_tabular_model(
         feature_importances = {}
         try:
             model = joblib.load(model_file)
-            features_df = df.drop(columns=[target_column])
-            
-            if hasattr(model, "feature_importances_"):
-                for name, importance in zip(features_df.columns, model.feature_importances_):
+
+            # If model is a Pipeline, extract the actual estimator and transformed feature names
+            if hasattr(model, "named_steps"):
+                estimator = model.named_steps.get("model", model)
+                try:
+                    feature_names = list(model.named_steps["preprocess"].get_feature_names_out())
+                except Exception:
+                    feature_names = list(df.drop(columns=[target_column]).columns)
+            else:
+                estimator = model
+                feature_names = list(df.drop(columns=[target_column]).columns)
+
+            # Clean up feature names (remove prefixes like "num__" and "cat__")
+            feature_names = [
+                n.split("__", 1)[1] if "__" in n else n for n in feature_names
+            ]
+
+            if hasattr(estimator, "feature_importances_"):
+                for name, importance in zip(feature_names, estimator.feature_importances_):
                     feature_importances[name] = float(importance)
-            elif hasattr(model, "estimators_"):
+            elif hasattr(estimator, "estimators_"):
                 importances_list = []
-                for estimator in model.estimators_:
-                    if hasattr(estimator, "feature_importances_"):
-                        importances_list.append(estimator.feature_importances_)
+                for est in estimator.estimators_:
+                    if hasattr(est, "feature_importances_"):
+                        importances_list.append(est.feature_importances_)
                 if importances_list:
                     mean_importances = np.mean(importances_list, axis=0)
-                    for name, importance in zip(features_df.columns, mean_importances):
+                    for name, importance in zip(feature_names, mean_importances):
                         feature_importances[name] = float(importance)
-            elif hasattr(model, "coef_"):
-                coef = np.abs(model.coef_)
+            elif hasattr(estimator, "coef_"):
+                coef = np.abs(estimator.coef_)
                 if coef.ndim == 1:
-                    for name, importance in zip(features_df.columns, coef):
+                    for name, importance in zip(feature_names, coef):
                         feature_importances[name] = float(importance)
                 else:
                     mean_coef = np.mean(coef, axis=0)
-                    for name, importance in zip(features_df.columns, mean_coef):
+                    for name, importance in zip(feature_names, mean_coef):
                         feature_importances[name] = float(importance)
         except Exception:
             pass
@@ -359,50 +432,88 @@ def train_tabular_model(
             ax.text(0.5, 0.5, "Feature importances not available", ha="center")
             ax.set_axis_off()
 
-        confusion_data = None
+        cm_fig = None
         if task_type == "classification" and "confusion_matrix" in metrics:
             try:
                 cm = np.array(metrics["confusion_matrix"])
                 if cm.ndim == 2 and cm.shape[0] > 0:
-                    unique_classes = list(y.unique())
-                    if len(unique_classes) == cm.shape[0] and len(unique_classes) == cm.shape[1]:
-                        classes = unique_classes
-                    else:
+                    classes = sorted(y.unique())
+                    if len(classes) != cm.shape[0]:
                         classes = [f"Class {i}" for i in range(cm.shape[0])]
-                    confusion_data = pd.DataFrame(cm, index=classes, columns=classes)
+                    classes = [str(c) for c in classes]
+                    cm_fig, cm_ax = plt.subplots(figsize=(6, 5))
+                    im = cm_ax.imshow(cm, interpolation="nearest", cmap="Blues")
+                    cm_fig.colorbar(im, ax=cm_ax)
+                    cm_ax.set(
+                        xticks=range(len(classes)),
+                        yticks=range(len(classes)),
+                        xticklabels=classes,
+                        yticklabels=classes,
+                        xlabel="Predicted",
+                        ylabel="Actual",
+                        title="Confusion Matrix",
+                    )
+                    thresh = cm.max() / 2.0
+                    for i in range(cm.shape[0]):
+                        for j in range(cm.shape[1]):
+                            cm_ax.text(j, i, str(cm[i, j]),
+                                       ha="center", va="center",
+                                       color="white" if cm[i, j] > thresh else "black")
+                    cm_fig.tight_layout()
             except Exception:
-                confusion_data = None
+                cm_fig = None
 
         success_msg = format_success_html(f"Training complete! Model saved to: {model_file}")
-        
-        print(f"[DEBUG] model_file being returned: '{model_file}'")
-        print(f"[DEBUG] Is file? {os.path.isfile(model_file)}, Is dir? {os.path.isdir(model_file)}")
 
         return (
             success_msg,
             model_file,
             metric_text,
             task_type.capitalize(),
-            json.dumps(metrics, indent=2),
+            {k: v for k, v in metrics.items() if k != "confusion_matrix"},
             gr.Plot(value=fig),
-            confusion_data if confusion_data is not None else pd.DataFrame(),
+            gr.Plot(value=cm_fig) if cm_fig is not None else gr.Plot(),
             model_file,
         )
 
     except Exception as e:
         import traceback
-        print(f"[DEBUG] EXCEPTION in train_tabular_model: {type(e).__name__}: {e}")
-        traceback.print_exc()
-        
+        tb_str = traceback.format_exc()
+
         job_manager.fail_job(job_id, str(e))
+
+        error_msg = str(e)
+        investigation_text = ""
+
+        if "Investigation Results:" in error_msg:
+            parts = error_msg.split("Investigation Results:", 1)
+            investigation_text = parts[1].strip()
+
+        if not investigation_text:
+            investigation_text = _run_error_investigation(
+                error=e, tb_str=tb_str, task_type="ml_training",
+                flow_name="MLTrainingFlow",
+                flow_args={"data_path": filepath, "target_column": target_column},
+            )
+
+        user_friendly_message = format_exception_for_user(
+            e,
+            context={
+                "data_path": filepath,
+                "target_column": target_column,
+            }
+        )
+
+        error_html = _build_error_html(user_friendly_message, investigation_text, tb_str)
+
         return (
-            format_error_html(f"Training failed: {str(e)}"),
+            error_html,
             gr.File(),
             "",
             "",
-            "",
+            {},
             gr.Plot(),
-            pd.DataFrame(),
+            gr.Plot(),
             "",
         )
 
@@ -419,20 +530,71 @@ def load_model_for_inference(
     try:
         model = joblib.load(model_path)
 
+        model_type = type(model).__name__
+        if hasattr(model, "named_steps") and "model" in model.named_steps:
+            actual_model = model.named_steps["model"]
+            model_type = f"Pipeline({type(actual_model).__name__})"
+
         info = {
-            "model_type": type(model).__name__,
+            "model_type": model_type,
             "path": model_path,
         }
 
+        # Load metadata if available
+        metadata_path = Path(model_path).parent / "metadata.json"
+        if metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text())
+            info["feature_columns"] = metadata.get("feature_columns", [])
+            info["task_type"] = metadata.get("task_type", "")
+            if metadata.get("description"):
+                info["description"] = metadata["description"]
+
         return (
-            format_success_html(f"Model loaded: {info['model_type']}"),
+            format_success_html(f"Model loaded: {model_type}"),
             gr.JSON(value=info),
         )
 
     except Exception as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "ml_inference", model_path=model_path)
-        return format_error_html(f"Failed to load model: {str(e)}"), gr.JSON(value={})
+        investigation_text = _run_error_investigation(
+            error=e, tb_str=tb_str, task_type="ml_inference",
+            flow_name="ModelLoading",
+            flow_args={"model_path": model_path},
+        )
+        return _build_error_html(f"Failed to load model: {str(e)}", investigation_text, tb_str), gr.JSON(value={})
+
+
+def _prepare_input_for_model(df: pd.DataFrame, model_dir: str) -> pd.DataFrame:
+    """Prepare raw input data for model prediction.
+
+    For Pipeline models (new): selects feature columns from metadata, passes
+    raw data through — the Pipeline handles preprocessing internally.
+    For legacy models (no Pipeline): applies manual one-hot encoding and
+    column alignment as a fallback.
+    """
+    import re
+
+    metadata_path = Path(model_dir) / "metadata.json"
+    if not metadata_path.exists():
+        return df
+
+    metadata = json.loads(metadata_path.read_text())
+    expected_features = metadata.get("feature_columns", [])
+    target_column = metadata.get("target_column", "")
+
+    if target_column and target_column in df.columns:
+        df = df.drop(columns=[target_column])
+
+    # If the model is a Pipeline with ColumnTransformer, just select
+    # the expected feature columns — the Pipeline handles the rest.
+    if expected_features:
+        # Add any missing expected columns with NaN (Pipeline imputer handles it)
+        for col in expected_features:
+            if col not in df.columns:
+                df[col] = np.nan
+        df = df[expected_features]
+
+    return df
 
 
 def predict_with_model(model_path: str, input_data: str) -> str:
@@ -443,6 +605,10 @@ def predict_with_model(model_path: str, input_data: str) -> str:
         features = json.loads(input_data)
         model = joblib.load(model_path)
         df = pd.DataFrame([features])
+
+        model_dir = str(Path(model_path).parent)
+        df = _prepare_input_for_model(df, model_dir)
+
         prediction = model.predict(df)[0]
 
         if hasattr(model, "predict_proba"):
@@ -457,8 +623,12 @@ def predict_with_model(model_path: str, input_data: str) -> str:
 
     except Exception as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "ml_inference", model_path=model_path)
-        return format_error_html(f"Prediction failed: {str(e)}")
+        investigation_text = _run_error_investigation(
+            error=e, tb_str=tb_str, task_type="ml_inference",
+            flow_name="Inference",
+            flow_args={"model_path": model_path, "input_data": input_data[:500]},
+        )
+        return _build_error_html(f"Prediction failed: {str(e)}", investigation_text, tb_str)
 
 
 def create_tabular_ml_tab() -> gr.Tab:
@@ -555,7 +725,7 @@ def create_tabular_ml_tab() -> gr.Tab:
                 metrics_json = gr.JSON(label="All Metrics")
                 feature_importance_plot = gr.Plot(label="Feature Importances")
 
-            confusion_matrix_display = gr.Dataframe(label="Confusion Matrix")
+            confusion_matrix_display = gr.Plot(label="Confusion Matrix")
 
         with gr.Row():
             inference_model_path = gr.Textbox(
@@ -579,6 +749,65 @@ def create_tabular_ml_tab() -> gr.Tab:
         )
 
     return tab
+
+
+def handle_llm_dataset_upload(
+    filepath: Optional[str],
+) -> tuple[gr.JSON, str, str, gr.Dropdown]:
+    if filepath is None:
+        return (
+            gr.JSON(value={}),
+            "",
+            "",
+            gr.Dropdown(choices=["SFT", "DPO", "GRPO"], value="SFT"),
+        )
+    
+    try:
+        from src.agent.dataset_analyzer import DatasetAnalyzer
+        
+        analyzer = DatasetAnalyzer()
+        analysis = analyzer.analyze(filepath)
+        
+        sample_preview = {
+            "file_type": analysis["file_type"],
+            "detected_format": analysis["detected_format"],
+            "sample_data": analysis["sample_data"][:3] if isinstance(analysis["sample_data"], list) else str(analysis["sample_data"])[:500],
+        }
+        
+        report_html = analyzer.generate_report(analysis)
+        
+        recommended = analysis["recommended_method"]
+        method_match_msg = format_success_html(f"Analysis complete. Recommended method: {recommended}")
+        
+        return (
+            gr.JSON(value=sample_preview),
+            report_html,
+            method_match_msg,
+            gr.Dropdown(choices=["SFT", "DPO", "GRPO"], value=recommended),
+        )
+    
+    except Exception as e:
+        import traceback
+        tb_str = traceback.format_exc()
+
+        investigation_text = _run_error_investigation(
+            error=e, tb_str=tb_str, task_type="dataset_analysis",
+            flow_name="DatasetAnalyzer",
+            flow_args={"data_path": filepath},
+        )
+
+        error_html = _build_error_html(
+            f"Dataset analysis failed: {str(e)}",
+            investigation_text,
+            tb_str,
+        )
+
+        return (
+            gr.JSON(value={}),
+            error_html,
+            "",
+            gr.Dropdown(choices=["SFT", "DPO", "GRPO"], value="SFT"),
+        )
 
 
 def train_llm_model(
@@ -641,96 +870,70 @@ Model saved to: {model_path}
     
     except Exception as e:
         import traceback
-        
+
         tb_str = traceback.format_exc()
-        
-        # Run error investigation
-        _investigate_training_error(
-            error=e,
-            tb_str=tb_str,
-            task_type="llm_training",
-            flow_name="LLMTrainingFlow",
-            flow_args={
+
+        error_msg = str(e)
+        investigation_text = ""
+
+        if "Investigation Results:" in error_msg:
+            parts = error_msg.split("Investigation Results:", 1)
+            investigation_text = parts[1].strip()
+
+        if not investigation_text:
+            investigation_text = _run_error_investigation(
+                error=e, tb_str=tb_str, task_type="llm_training",
+                flow_name="LLMTrainingFlow",
+                flow_args={
+                    "data_path": train_file,
+                    "training_method": training_method,
+                    "base_model": base_model,
+                    "epochs": epochs,
+                    "learning_rate": learning_rate,
+                },
+            )
+
+        user_friendly_message = format_exception_for_user(
+            e,
+            context={
                 "data_path": train_file,
                 "training_method": training_method,
                 "base_model": base_model,
-                "epochs": epochs,
-                "learning_rate": learning_rate,
-            },
+            }
         )
-        
-        diagnosis = ""
-        error_msg = str(e).lower()
-        
-        if "out of memory" in error_msg or "cuda oom" in error_msg:
-            diagnosis = """
-<h4>Diagnosis: GPU Out of Memory</h4>
-<p>The model is too large for available GPU memory. Suggestions:</p>
-<ul>
-<li>Use a smaller base model (e.g., Qwen/Qwen2.5-0.5B)</li>
-<li>Reduce MAX_SEQ_LENGTH in config.py</li>
-<li>Use a GPU with more VRAM</li>
-</ul>"""
-        elif "file not found" in error_msg:
-            diagnosis = """
-<h4>Diagnosis: File Not Found</h4>
-<p>The training data file could not be found. Check that the upload succeeded.</p>"""
-        elif "validation" in error_msg or "invalid format" in error_msg:
-            diagnosis = """
-<h4>Diagnosis: Data Format Issue</h4>
-<p>The training data format doesn't match the selected method. Check:</p>
-<ul>
-<li>For SFT: Use JSONL with 'text' or 'messages' fields, or TXT with Q:/A: format</li>
-<li>For DPO: Use JSONL with 'prompt', 'chosen', and 'rejected' fields</li>
-<li>For GRPO: Use JSONL with 'prompt' field (optionally 'ground_truth' or 'pattern')</li>
-</ul>"""
-        elif "connection" in error_msg or "timeout" in error_msg:
-            diagnosis = """
-<h4>Diagnosis: Connection Issue</h4>
-<p>Could not connect to training infrastructure. Ensure:</p>
-<ul>
-<li>Docker container is running with proper GPU access</li>
-<li>Metaflow is configured correctly</li>
-</ul>"""
-        else:
-            diagnosis = f"""
-<h4>Diagnosis: Unexpected Error</h4>
-<p>Error type: {type(e).__name__}</p>"""
-        
-        error_report = f"""
+
+        error_html = f"""
 {analysis_report}
 <hr>
-<div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 12px;">
-<h3>Training Failed</h3>
-{diagnosis}
-<details>
-<summary style="cursor: pointer; margin-top: 12px;"><b>View Full Traceback</b></summary>
-<pre style="background-color: #f3f4f6; padding: 12px; overflow-x: auto; margin-top: 8px;">
-{tb_str}
-</pre>
-</details>
-</div>"""
-        
-        return (error_report, gr.File())
+{_build_error_html(user_friendly_message, investigation_text, tb_str)}"""
+
+        return (error_html, gr.File())
 
 
 def create_llm_finetuning_tab() -> gr.Tab:
     with gr.Tab("LLM Fine-tuning") as tab:
         gr.Markdown("# LLM Fine-tuning")
-        gr.Markdown("Upload training data and configure fine-tuning parameters. The agent will analyze your dataset and recommend the best training method.")
+        gr.Markdown("Upload a dataset and the agent will analyze it with RAG to recommend the best training method.")
 
         with gr.Row():
             train_file = gr.File(
-                label="Upload Training File (TXT/PDF/JSONL)",
-                file_types=[".txt", ".pdf", ".jsonl"],
+                label="Upload Training File (JSONL/TXT/PDF)",
+                file_types=[".jsonl", ".txt", ".pdf"],
                 type="filepath",
             )
 
+        with gr.Accordion("Dataset Preview & Analysis", open=True):
+            sample_preview = gr.JSON(label="Sample Data")
+            analysis_report = gr.HTML()
+        
+        validation_status = gr.HTML()
+
         with gr.Row():
-            training_method = gr.Radio(
-                label="Training Method",
+            training_method = gr.Dropdown(
+                label="Training Method (auto-selected from analysis)",
                 choices=["SFT", "DPO", "GRPO"],
                 value="SFT",
+                interactive=True,
             )
 
             base_model = gr.Dropdown(
@@ -738,6 +941,17 @@ def create_llm_finetuning_tab() -> gr.Tab:
                 choices=BASE_MODELS,
                 value=BASE_MODELS[0],
             )
+
+        train_file.change(
+            fn=handle_llm_dataset_upload,
+            inputs=[train_file],
+            outputs=[
+                sample_preview,
+                analysis_report,
+                validation_status,
+                training_method,
+            ],
+        )
 
         with gr.Accordion("Training Parameters", open=False):
             epochs = gr.Slider(
@@ -793,7 +1007,6 @@ def create_llm_finetuning_tab() -> gr.Tab:
             interactive=False,
         )
 
-        # Show GRPO accordion when GRPO is selected
         training_method.change(
             fn=lambda x: gr.Accordion(visible=(x == "GRPO")),
             inputs=[training_method],
@@ -924,16 +1137,22 @@ def load_lora_adapter(
 
     except FileNotFoundError as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
-        return format_error_html(f"File not found: {e}"), gr.Dropdown()
+        investigation_text = _run_error_investigation(
+            e, tb_str, "llm_inference", "LLMInference", {"lora_path": lora_path, "base_model": base_model}
+        )
+        return _build_error_html(f"File not found: {e}", investigation_text, tb_str), gr.Dropdown()
     except ValueError as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
-        return format_error_html(f"Invalid configuration: {e}"), gr.Dropdown()
+        investigation_text = _run_error_investigation(
+            e, tb_str, "llm_inference", "LLMInference", {"lora_path": lora_path, "base_model": base_model}
+        )
+        return _build_error_html(f"Invalid configuration: {e}", investigation_text, tb_str), gr.Dropdown()
     except Exception as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference", model_path=lora_path)
-        return format_error_html(f"Error loading model: {e}"), gr.Dropdown()
+        investigation_text = _run_error_investigation(
+            e, tb_str, "llm_inference", "LLMInference", {"lora_path": lora_path, "base_model": base_model}
+        )
+        return _build_error_html(f"Error loading model: {e}", investigation_text, tb_str), gr.Dropdown()
 
 
 def generate_with_lora(
@@ -974,12 +1193,16 @@ def generate_with_lora(
 
     except RuntimeError as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference")
-        return format_error_html(f"Generation error: {e}")
+        investigation_text = _run_error_investigation(
+            e, tb_str, "llm_inference", "LLMInference", {"prompt": prompt[:200] if prompt else ""}
+        )
+        return _build_error_html(f"Generation error: {e}", investigation_text, tb_str)
     except Exception as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference")
-        return format_error_html(f"Unexpected error: {e}")
+        investigation_text = _run_error_investigation(
+            e, tb_str, "llm_inference", "LLMInference", {"prompt": prompt[:200] if prompt else ""}
+        )
+        return _build_error_html(f"Unexpected error: {e}", investigation_text, tb_str)
 
 
 def generate_with_lora_streaming(
@@ -1022,12 +1245,20 @@ def generate_with_lora_streaming(
 
     except RuntimeError as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference")
-        yield format_error_html(f"Generation error: {e}")
+        investigation_text = _run_error_investigation(
+            error=e, tb_str=tb_str, task_type="llm_inference",
+            flow_name="LLMInference",
+            flow_args={"prompt": prompt[:200]},
+        )
+        yield _build_error_html(f"Generation error: {e}", investigation_text, tb_str)
     except Exception as e:
         tb_str = traceback.format_exc()
-        _investigate_inference_error(e, tb_str, "llm_inference")
-        yield format_error_html(f"Unexpected error: {e}")
+        investigation_text = _run_error_investigation(
+            error=e, tb_str=tb_str, task_type="llm_inference",
+            flow_name="LLMInference",
+            flow_args={"prompt": prompt[:200]},
+        )
+        yield _build_error_html(f"Unexpected error: {e}", investigation_text, tb_str)
 
 
 def merge_lora_adapter_wrapper(
@@ -1174,12 +1405,12 @@ Total Questions: {results['total_evaluated']}<br><br>
         tb_str = traceback.format_exc()
         
         error_html = f"""
-<div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 12px;">
-<h3>Evaluation Failed</h3>
-<p>{str(e)}</p>
+<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; color: #991b1b !important;">
+<h3 style="color: #991b1b !important;">Evaluation Failed</h3>
+<p style="color: #991b1b !important;">{str(e)}</p>
 <details>
-<summary style="cursor: pointer; margin-top: 12px;"><b>View Full Traceback</b></summary>
-<pre style="background-color: #f3f4f6; padding: 12px; overflow-x: auto; margin-top: 8px;">
+<summary style="cursor: pointer; margin-top: 12px; color: #991b1b !important;"><b>View Full Traceback</b></summary>
+<pre style="background-color: #f3f4f6 !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #1f2937 !important;">
 {tb_str}
 </pre>
 </details>
@@ -1372,6 +1603,7 @@ with gr.Blocks(title="Agentic AutoML Platform", theme="JohnSmith9982/small_and_p
     create_llm_finetuning_tab()
     create_inference_playground_tab()
     create_ragas_evaluation_tab()
+    create_llm_inference_tab()
 
 
 if __name__ == "__main__":

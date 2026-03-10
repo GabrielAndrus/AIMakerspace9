@@ -1,5 +1,4 @@
 from typing import TypedDict, Optional, Annotated, Any
-from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 
 
@@ -36,6 +35,8 @@ class InvestigationState(TypedDict):
     needs_refinement: bool
 
     fetched_docs: list[dict]
+
+    relevant_urls: list[str]
 
     recommendation: str
     confidence_level: str

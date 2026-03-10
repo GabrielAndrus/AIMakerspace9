@@ -1,9 +1,9 @@
 """Query Generator Agent - Crafts precise ML-specific search queries."""
 
 import json
-from langchain.chat_models import init_chat_model
 
 from src.config import settings
+from src.utils.langfuse_client import langfuse_trace, trace_llm_call
 
 
 QUERY_GENERATOR_PROMPT = """You are an expert at crafting search queries for ML/LLM debugging.
@@ -68,23 +68,26 @@ Base Model: {base_model or 'N/A'}
     )
     
     try:
-        model = init_chat_model(
-            "openai/gpt-oss-120b",
-            model_provider="openai",
-            config={
-                "base_url": settings.LLM_INFERENCE_URL,
-                "api_key": settings.LLM_INFERENCE_KEY,
-                "temperature": 0.2,
-            },
-        )
-        
-        prompt = QUERY_GENERATOR_PROMPT.format(
-            error_context=context_str,
-            query_history=history_str
-        )
-        
-        response = model.invoke(prompt)
-        content = response.content.strip()
+        with langfuse_trace("query_generation", input={"error_type": error_type, "iteration_count": iteration_count}) as trace:
+            from langchain.chat_models import init_chat_model
+            model = init_chat_model(
+                settings.LLM_MODEL_NAME,
+                model_provider="openai",
+                base_url=settings.LLM_INFERENCE_URL,
+                api_key=settings.LLM_INFERENCE_KEY,
+                temperature=0.2,
+            )
+
+            prompt = QUERY_GENERATOR_PROMPT.format(
+                error_context=context_str,
+                query_history=history_str
+            )
+
+            response = model.invoke(prompt)
+            content = response.content.strip()
+            trace_llm_call(trace, "generate_queries", prompt, content, settings.LLM_MODEL_NAME)
+            if trace:
+                trace.update(output={"generated_queries": content})
         
         try:
             if content.startswith("```"):
