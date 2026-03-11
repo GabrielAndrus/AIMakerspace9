@@ -50,7 +50,6 @@ See [quickstart.md](quickstart.md) for detailed setup instructions.
 uv pip install -e .
 docker-compose up -d
 python -m src.retrieval.indexer
-python src/app.py
 ```
 
 ## Project Structure
