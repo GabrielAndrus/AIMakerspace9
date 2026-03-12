@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic AutoML Platform</title>
+
+<!-- CDN: D3.js v7 for state machine (slide 7), Chart.js v4 for radar (slide 9) -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
+
+<div class="progress-track"><div class="progress-bar" id="progress"></div></div>
+
+<div class="deck" id="deck">
+
+<!-- ════════════════════════ SLIDE 1: TITLE — Particle Network + Typewriter ════════════════════════ -->
+<div class="slide active" data-slide="0">
+  <canvas id="particle-canvas"></canvas>
+  <div class="center stagger">
+    <div class="eyebrow" style="color:var(--orange);">AI Makerspace &middot; Cohort 9</div>
+    <h1><span class="gradient">Agentic AutoML</span><br>Platform</h1>
+    <p class="subtitle mt-sm" id="typewriter-target" style="min-height:2.5em;"></p>
+    <div class="status mt-lg" id="gradio-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Checking live platform...</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 2: THE PROBLEM — Animated Gauntlet ════════════════════════ -->
+<div class="slide" data-slide="1">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--red);">The Problem</div>
+    <h2 style="margin-bottom:12px;">ML is gatekept by expertise</h2>
+    <div class="gauntlet-container" id="gauntlet">
+      <!-- Floating error snippets -->
+      <div class="error-float" style="left:5%; top:60%; animation-delay:0s;">CUDA OOM</div>
+      <div class="error-float" style="left:25%; top:70%; animation-delay:1.5s;">NaN loss</div>
+      <div class="error-float" style="left:50%; top:55%; animation-delay:3s;">KeyError: 'labels'</div>
+      <div class="error-float" style="left:72%; top:65%; animation-delay:0.8s;">shapes mismatch</div>
+      <div class="error-float" style="left:88%; top:75%; animation-delay:2.2s;">RuntimeError</div>
+      <div class="error-float" style="left:15%; top:80%; animation-delay:4s;">pip conflict</div>
+      <svg id="gauntlet-svg" viewBox="0 0 960 260" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <p style="color:var(--text-sec); font-size:0.9rem; margin-top:10px; text-align:center;">The barrier isn't data or compute &mdash; it's <strong style="color:var(--white);">knowing what decisions to make</strong>.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 3: THE VISION — Agent Constellation ════════════════════════ -->
+<div class="slide" data-slide="2">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--green);">Our Solution</div>
+    <h2 style="margin-bottom:12px;">Agents that make the hard decisions for you</h2>
+    <div class="constellation-container" id="constellation">
+      <svg id="constellation-svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <p style="color:var(--text-sec); font-size:0.95rem; margin-top:8px;">Upload data. Click a button. <strong style="color:var(--white);">Agents handle the rest.</strong></p>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 4: ARCHITECTURE — Isometric + Boot Sequence ════════════════════════ -->
+<div class="slide" data-slide="3">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--cyan);">Architecture</div>
+    <h2 style="margin-bottom:16px;">8 services, one command</h2>
+    <div class="iso-container" id="iso-arch">
+      <!-- Boot terminal overlay -->
+      <div class="boot-terminal" id="boot-terminal">
+        <div style="color:var(--text-dim);">$ docker compose up -d</div>
+      </div>
+      <!-- Isometric SVG inserted by JS -->
+      <svg id="iso-svg" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 5: MODEL SELECTION — Animated Pipeline ════════════════════════ -->
+<div class="slide" data-slide="4">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--orange);">Behind the Scenes &middot; Agent 1</div>
+    <h2 style="margin-bottom:12px;">How the Model Selection Agent thinks</h2>
+    <div class="pipeline-container" id="pipeline">
+      <svg id="pipeline-svg" viewBox="0 0 960 280" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+    <div class="prompt-snippet" id="pipeline-prompt">
+      <div class="mono" style="font-size:0.72rem; max-width:500px; margin:0 auto; text-align:left;">
+        <span class="kw">system:</span> <span class="str">"Recommend models for {task_type}</span><br>
+        <span class="str">&nbsp;&nbsp;with {n_rows} rows, {n_features} features"</span><br>
+        <span class="cm">// + 5 retrieved sklearn doc chunks</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 6: DATASET ANALYZER — Decision Tree ════════════════════════ -->
+<div class="slide" data-slide="5">
+  <div class="inner" style="align-items:center; position:relative;">
+    <div class="eyebrow" style="color:var(--indigo);">Behind the Scenes &middot; Agent 2</div>
+    <h2 style="margin-bottom:8px;">How the Dataset Analyzer decides SFT vs DPO vs GRPO</h2>
+    <div class="dtree-container" id="dtree">
+      <svg id="dtree-svg" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div class="dtree-output" id="dtree-output"></div>
+    </div>
+    <div class="dtree-buttons">
+      <button class="dtree-btn" onclick="triggerDTree('sft')">Try: Chat Data (SFT)</button>
+      <button class="dtree-btn" onclick="triggerDTree('dpo')">Try: Preference Data (DPO)</button>
+      <button class="dtree-btn" onclick="triggerDTree('grpo')">Try: Reward Data (GRPO)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 7: ERROR INVESTIGATION — D3 State Machine ════════════════════════ -->
+<div class="slide" data-slide="6">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--red);">Behind the Scenes &middot; Agent 3</div>
+    <h2 style="margin-bottom:4px;">The Error Investigation Agent</h2>
+    <p class="subtitle" style="font-size:1rem; margin-bottom:12px;">When training fails, this agent automatically searches the internet for solutions, checks if they're good enough, and writes step-by-step fix instructions.</p>
+    <div id="d3-graph-container"></div>
+    <div style="display:flex; align-items:center; gap:24px;">
+      <button class="graph-replay-btn" id="graph-replay-btn" onclick="replayGraphToken(true)">Replay (Retry Path)</button>
+      <div class="graph-iter-counter" id="graph-iter">Iteration: 1 / 3</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 8: UX — Split-Screen Animation ════════════════════════ -->
+<div class="slide" data-slide="7">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--green);">The Experience</div>
+    <h2 style="margin-bottom:14px;">Complexity hidden, simplicity delivered</h2>
+    <div class="split-screen" id="split-screen">
+      <!-- Left: What you do -->
+      <div class="split-half split-left">
+        <div class="split-title" style="color:var(--green);">What you do</div>
+        <div class="mock-step" id="mock-1"><span class="mock-step-icon">&#128193;</span> Upload CSV file</div>
+        <div class="mock-step" id="mock-2"><span class="mock-step-icon">&#9660;</span> Select target column</div>
+        <div class="mock-step" id="mock-3"><span class="mock-step-icon">&#9654;</span> Click "Train"</div>
+        <div class="mock-step" id="mock-4"><span class="mock-step-icon">&#10003;</span> Download model.zip</div>
+        <div class="click-counter" id="click-counter">0</div>
+      </div>
+      <!-- Right: What happens underneath -->
+      <div class="split-half split-right">
+        <div class="split-title" style="color:var(--orange);">What happens underneath</div>
+        <div class="gantt-bar-row"><span class="gantt-label">Check your data</span><div class="gantt-track"><div class="gantt-fill" data-width="2%" style="background:var(--orange);"></div></div><span class="gantt-time">120ms</span></div>
+        <div class="gantt-bar-row"><span class="gantt-label">Convert to searchable format</span><div class="gantt-track"><div class="gantt-fill" data-width="5.5%" style="background:var(--cyan);"></div></div><span class="gantt-time">340ms</span></div>
+        <div class="gantt-bar-row"><span class="gantt-label">Find similar past projects</span><div class="gantt-track"><div class="gantt-fill" data-width="1.4%" style="background:var(--cyan);"></div></div><span class="gantt-time">85ms</span></div>
+        <div class="gantt-bar-row"><span class="gantt-label">AI picks best models</span><div class="gantt-track"><div class="gantt-fill" data-width="19%" style="background:var(--indigo);"></div></div><span class="gantt-time">1.2s</span></div>
+        <div class="gantt-bar-row"><span class="gantt-label">Build &amp; test models</span><div class="gantt-track"><div class="gantt-fill" data-width="72%" style="background:var(--orange);"></div></div><span class="gantt-time">4.5s</span></div>
+        <div class="gantt-bar-row"><span class="gantt-label">Log everything</span><div class="gantt-track"><div class="gantt-fill" data-width="0.8%" style="background:var(--amber);"></div></div><span class="gantt-time">50ms</span></div>
+        <div class="split-stats" id="split-stats">
+          <span>6+ AI decisions</span>
+          <span>8 services coordinated</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 9: OBSERVABILITY — Waterfall + Radar ════════════════════════ -->
+<div class="slide" data-slide="8">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--amber);">Trust &amp; Verify</div>
+    <h2 style="margin-bottom:16px;">Every decision traced. Every retrieval measured.</h2>
+    <div class="obs-layout">
+      <!-- Left: Trace Waterfall -->
+      <div>
+        <h3 style="color:var(--amber); font-size:0.9rem; margin-bottom:4px;">Timeline: What happens during one request</h3>
+        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:12px;">Every step is automatically logged so you can see exactly where time is spent</p>
+        <div class="waterfall-container" id="waterfall">
+          <div class="waterfall-row">
+            <span class="waterfall-label">Convert query to searchable format</span>
+            <div class="waterfall-track"><div class="waterfall-bar" data-width="5.4%" style="background:var(--cyan);"></div></div>
+            <span class="waterfall-dur">340ms</span>
+          </div>
+          <div class="waterfall-row">
+            <span class="waterfall-label">Search knowledge base</span>
+            <div class="waterfall-track"><div class="waterfall-bar" data-width="1.3%" style="background:var(--cyan); left:5.4%;"></div></div>
+            <span class="waterfall-dur">85ms</span>
+          </div>
+          <div class="waterfall-row">
+            <span class="waterfall-label">AI picks best models</span>
+            <div class="waterfall-track"><div class="waterfall-bar" data-width="19%" style="background:var(--indigo); left:6.7%;"></div></div>
+            <span class="waterfall-dur">1.2s</span>
+          </div>
+          <div class="waterfall-row">
+            <span class="waterfall-label">Build &amp; test models</span>
+            <div class="waterfall-track"><div class="waterfall-bar" data-width="71.4%" style="background:var(--orange); left:25.7%;"></div></div>
+            <span class="waterfall-dur">4.5s</span>
+          </div>
+          <div class="waterfall-row">
+            <span class="waterfall-label">Save results to log</span>
+            <div class="waterfall-track"><div class="waterfall-bar" data-width="0.8%" style="background:var(--amber); left:97.1%;"></div></div>
+            <span class="waterfall-dur">50ms</span>
+          </div>
+        </div>
+        <div class="waterfall-total">Total: <strong>6.3s</strong></div>
+      </div>
+      <!-- Right: Radar Chart -->
+      <div class="radar-container">
+        <h3 style="color:var(--cyan); font-size:0.9rem; margin-bottom:4px;">How well does the AI find relevant info?</h3>
+        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:12px;">Compares 3 search strategies on accuracy, relevance, and completeness</p>
+        <canvas id="ragas-radar" width="360" height="320"></canvas>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <span class="tag tag-cyan">Dense (meaning-based)</span>
+          <span class="tag tag-indigo">Sparse (keyword-based)</span>
+          <span class="tag tag-amber">Hybrid (both combined)</span>
+        </div>
+        <button class="btn btn-orange btn-sm" style="margin-top:10px;" onclick="runLiveRagas()">Run Live</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 10: LIVE DEMO — Health Rings + Tabbed Playground ════════════════════════ -->
+<div class="slide" data-slide="9">
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--orange);">Live Demo</div>
+    <h2 style="margin-bottom:6px;">See it running</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:14px;">All 8 services running in Docker — green means healthy, red means down</p>
+    <!-- Health ring dashboard -->
+    <div class="health-rings" id="health-rings"></div>
+    <button class="btn btn-orange btn-sm" onclick="checkHealthRings()" style="margin-bottom:16px;">Refresh Health</button>
+    <!-- Tabbed API playground -->
+    <div style="width:100%; max-width:900px;">
+      <div class="api-tabs">
+        <div class="api-tab active" onclick="switchTab(0)">Analyze a Spreadsheet</div>
+        <div class="api-tab" onclick="switchTab(1)">Detect Training Format</div>
+        <div class="api-tab" onclick="switchTab(2)">Measure Search Quality</div>
+      </div>
+      <div class="api-tab-content active" id="tab-0">
+        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">Upload any CSV and the agent profiles your data — columns, types, missing values, and what models might work.</p>
+        <div style="display:flex; gap:10px; align-items:end;">
+          <div style="flex:1;"><label style="font-size:0.75rem; color:var(--text-dim);">CSV URL</label>
+            <input id="csv-url" value="https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv" style="padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.8rem; width:100%;">
+          </div>
+          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeCSV()">Analyze</button>
+        </div>
+        <div class="api-terminal" id="tab-0-out"><span class="req">POST /api/handle_csv_upload</span></div>
+      </div>
+      <div class="api-tab-content" id="tab-1">
+        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">The agent examines your dataset and automatically detects which training method to use.</p>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('sft')">Try: Chat Data (SFT)</button>
+          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('dpo')">Try: Preference Data (DPO)</button>
+          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('grpo')">Try: Reward Data (GRPO)</button>
+        </div>
+        <div class="api-terminal" id="tab-1-out"><span class="req">POST /api/handle_llm_dataset_upload</span></div>
+      </div>
+      <div class="api-tab-content" id="tab-2">
+        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">Tests how accurately the system finds relevant information — measures if answers are correct, relevant, and complete.</p>
+        <div style="display:flex; gap:10px; align-items:end;">
+          <div><label style="font-size:0.75rem; color:var(--text-dim);">Search Strategy</label>
+            <select id="ragas-method" style="padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.8rem;">
+              <option value="dense">Dense</option>
+              <option value="sparse">Sparse (BM25)</option>
+              <option value="hybrid" selected>Hybrid (RRF)</option>
+            </select>
+          </div>
+          <button class="btn btn-orange btn-sm" onclick="tabRunRagas()">Evaluate</button>
+        </div>
+        <div class="api-terminal" id="tab-2-out"><span class="req">POST /api/run_ragas_evaluation</span></div>
+      </div>
+    </div>
+    <div style="text-align:center; margin-top:20px;">
+      <div class="mono" style="display:inline-block; text-align:left; max-width:500px;">
+        <span class="cm"># Get started</span><br>
+        <span class="fn">uv pip install</span> <span class="str">-e .</span><br>
+        <span class="fn">docker compose</span> <span class="str">up -d</span><br>
+        <span class="fn">python</span> <span class="str">-m src.retrieval.indexer</span><br>
+        <span class="cm"># Open http://localhost:7860</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /deck -->
+
+<div class="counter"><span id="current">1</span> / <span id="total">10</span></div>
+<div class="nav-hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> or <kbd>Space</kbd></div>
+
+<script src="engine.js"></script>
+<script src="js/slide01.js"></script>
+<script src="js/slide02.js"></script>
+<script src="js/slide03.js"></script>
+<script src="js/slide04.js"></script>
+<script src="js/slide05.js"></script>
+<script src="js/slide06.js"></script>
+<script src="js/slide07.js"></script>
+<script src="js/slide08.js"></script>
+<script src="js/slide09.js"></script>
+<script src="js/slide10.js"></script>
+<script src="init.js"></script>
+</body>
+</html>
