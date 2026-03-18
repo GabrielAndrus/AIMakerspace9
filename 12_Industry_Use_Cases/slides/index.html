@@ -13,8 +13,11 @@
 </head>
 <body>
 
-<div class="bg-glow bg-glow-1"></div>
-<div class="bg-glow bg-glow-2"></div>
+<div class="background-grid"></div>
+<canvas class="ascii-corner-glow ascii-corner-glow-tr" id="glow-corner-tr" width="550" height="550"></canvas>
+<canvas class="ascii-corner-glow ascii-corner-glow-bl" id="glow-corner-bl" width="550" height="550"></canvas>
+<canvas class="ascii-corner ascii-corner-tr" id="ascii-corner-tr" width="550" height="550"></canvas>
+<canvas class="ascii-corner ascii-corner-bl" id="ascii-corner-bl" width="550" height="550"></canvas>
 
 <div class="progress-track"><div class="progress-bar" id="progress"></div></div>
 
@@ -22,11 +25,15 @@
 
 <!-- ════════════════════════ SLIDE 1: TITLE — Particle Network + Typewriter ════════════════════════ -->
 <div class="slide active" data-slide="0">
-  <canvas id="particle-canvas"></canvas>
+  <div class="orb-glow"></div>
+  <canvas class="ascii-orb" id="ascii-orb-0" width="1320" height="1320"></canvas>
   <div class="center stagger">
-    <div class="eyebrow" style="color:var(--orange);">AI Makerspace &middot; Cohort 9</div>
+    <div class="eyebrow" style="color:var(--gold);">AI Makerspace &middot; Cohort 9</div>
     <h1><span class="gradient">Agentic AutoML</span><br>Platform</h1>
-    <p class="subtitle mt-sm" id="typewriter-target" style="min-height:2.5em;"></p>
+    <div class="term-chrome mt-sm" style="max-width:680px; width:100%;">
+      <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+      <div id="typewriter-target" style="background:#282828; color:#ebdbb2; padding:14px 18px; font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.82rem; line-height:1.6; min-height:2.5em; border-radius:0 0 8px 8px;"></div>
+    </div>
     <div class="status mt-lg" id="gradio-status">
       <span class="status-dot" id="status-dot"></span>
       <span id="status-text">Checking live platform...</span>
@@ -50,18 +57,44 @@
       <svg id="gauntlet-svg" viewBox="0 0 960 260" xmlns="http://www.w3.org/2000/svg"></svg>
     </div>
     <p style="color:var(--text-sec); font-size:0.9rem; margin-top:10px; text-align:center;">The barrier isn't data or compute &mdash; it's <strong style="color:var(--white);">knowing what decisions to make</strong>.</p>
+    <div style="position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-size:0.55rem; color:rgba(255,255,255,0.08); letter-spacing:1px; font-family:var(--mono);">introduce the Titanic dataset</div>
   </div>
 </div>
 
 <!-- ════════════════════════ SLIDE 3: THE VISION — Agent Constellation ════════════════════════ -->
 <div class="slide" data-slide="2">
-  <div class="inner" style="align-items:center;">
+  <div class="inner" style="align-items:center; padding:0 24px;">
     <div class="eyebrow" style="color:var(--green);">Our Solution</div>
-    <h2 style="margin-bottom:12px;">Agents that make the hard decisions for you</h2>
-    <div class="constellation-container" id="constellation">
-      <svg id="constellation-svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg"></svg>
+    <h2 style="margin-bottom:16px;">Agents that make the hard decisions for you</h2>
+
+    <div class="solution-columns">
+      <!-- LEFT: The Platform -->
+      <div class="solution-col solution-col-platform">
+        <div class="solution-col-label">The Platform</div>
+        <canvas id="dgx-spark-canvas" width="340" height="200"></canvas>
+        <div class="solution-service-tags" id="solution-services"></div>
+        <div style="font-size:0.62rem; color:var(--text-dim); margin-top:8px; letter-spacing:0.5px; font-family:var(--mono);">Running on NVIDIA DGX Spark</div>
+      </div>
+
+      <!-- CENTER: The Agents -->
+      <div class="solution-col solution-col-agents">
+        <div class="solution-col-label">The Agents</div>
+        <canvas id="agent-network-canvas" width="320" height="320"></canvas>
+      </div>
+
+      <!-- RIGHT: Our Customers -->
+      <div class="solution-col solution-col-customers">
+        <div class="solution-col-label">Our Customers</div>
+        <div class="customer-card" id="customer-veox">
+          <div class="customer-card-name" style="color:#22d3ee;">Veox</div>
+          <div class="customer-card-desc">AI algorithm factory — evolving novel algorithms for enterprise data</div>
+        </div>
+        <div class="customer-card" id="customer-forge">
+          <div class="customer-card-name" style="color:#f97316;">Forge Utah</div>
+          <div class="customer-card-desc">Tech community for developers — meetups, roundtables, and conferences</div>
+        </div>
+      </div>
     </div>
-    <p style="color:var(--text-sec); font-size:0.95rem; margin-top:8px;">Upload data. Click a button. <strong style="color:var(--white);">Agents handle the rest.</strong></p>
   </div>
 </div>
 
@@ -70,232 +103,680 @@
   <div class="inner" style="align-items:center;">
     <div class="eyebrow" style="color:var(--cyan);">Architecture</div>
     <h2 style="margin-bottom:16px;">8 services, one command</h2>
-    <div class="iso-container" id="iso-arch">
-      <!-- Boot terminal overlay -->
-      <div class="boot-terminal" id="boot-terminal">
-        <div style="color:var(--text-dim);">$ docker compose up -d</div>
+    <div class="arch-layout">
+      <!-- LEFT: Boot terminal -->
+      <div class="arch-terminal">
+        <div class="term-chrome" id="boot-terminal">
+          <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+          <div class="boot-terminal-body mono" style="border-radius:0 0 8px 8px; border-top:none; min-height:280px;">
+            <div style="color:#928374;">$ docker compose up -d</div>
+          </div>
+        </div>
       </div>
-      <!-- Isometric SVG inserted by JS -->
-      <svg id="iso-svg" viewBox="0 0 900 420" xmlns="http://www.w3.org/2000/svg"></svg>
+      <!-- RIGHT: ASCII architecture canvas -->
+      <div class="arch-diagram">
+        <canvas id="arch-canvas" width="560" height="380"></canvas>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 5: MODEL SELECTION — Animated Pipeline ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 5: LIVE DEMO — End-to-End Workflow ════════════════════════ -->
 <div class="slide" data-slide="4">
   <div class="inner" style="align-items:center;">
-    <div class="eyebrow" style="color:var(--orange);">Behind the Scenes &middot; Agent 1</div>
-    <h2 style="margin-bottom:12px;">How the Model Selection Agent thinks</h2>
-    <div class="pipeline-container" id="pipeline">
-      <svg id="pipeline-svg" viewBox="0 0 960 280" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="eyebrow" style="color:var(--orange);">Live Demo &middot; Titanic Dataset</div>
+    <h2 style="margin-bottom:4px;">From raw CSV to trained model in 4 steps</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Using the Titanic dataset — predict who survived based on passenger info.</p>
+    <!-- Health ring dashboard (compact) -->
+    <div class="health-rings" id="health-rings"></div>
+
+    <!-- Sequential demo flow -->
+    <div class="demo-flow">
+      <!-- Stage 1: Upload CSV -->
+      <div class="demo-stage visible" id="stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Upload the Titanic dataset</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Grab the CSV from a URL or upload your own.</p>
+          <div class="demo-input-row">
+            <input id="csv-url" value="https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv" placeholder="CSV URL..." style="flex:1; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem;">
+            <button class="btn btn-orange btn-sm" id="btn-stage-1" onclick="runStage1()">Upload &amp; Analyze</button>
+          </div>
+          <div class="demo-stage-output" id="out-1" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Select target -->
+      <div class="demo-stage" id="stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Select what to predict</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Choose the target column — we'll detect if it's classification or regression.</p>
+          <div class="demo-input-row">
+            <select id="demo-target" style="padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem;"><option>Survived</option></select>
+            <button class="btn btn-orange btn-sm" id="btn-stage-2" onclick="runStage2()">Analyze Target</button>
+          </div>
+          <div class="demo-stage-output" id="out-2" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Train model -->
+      <div class="demo-stage" id="stage-3">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">3</div>
+          <div class="demo-stage-title">Train the model</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">The agent picks the best algorithms and trains an ensemble.</p>
+          <button class="btn btn-orange btn-sm" id="btn-stage-3" onclick="runStage3()">Train Model</button>
+          <div class="demo-stage-output" id="out-3" style="display:none;"></div>
+          <div id="stage-3-results" style="display:none; margin-top:10px;">
+            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+              <div style="flex:1; min-width:200px;"><h4 style="color:var(--orange); font-size:0.75rem; margin:0 0 6px 0;">Feature Importance</h4><div id="feature-bars" class="demo-feature-bars"></div></div>
+              <div style="flex:1; min-width:140px;"><h4 style="color:var(--cyan); font-size:0.75rem; margin:0 0 6px 0;">Confusion Matrix</h4><div id="confusion-matrix" class="demo-cm"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Predict -->
+      <div class="demo-stage" id="stage-4">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">4</div>
+          <div class="demo-stage-title">Would YOU have survived the Titanic?</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Enter your passenger details and see the prediction.</p>
+          <div class="demo-input-row" style="flex-wrap:wrap;">
+            <div class="demo-input-group"><label>Passenger Class</label><select id="pred-pclass"><option value="1">1st</option><option value="2">2nd</option><option value="3" selected>3rd</option></select></div>
+            <div class="demo-input-group"><label>Sex</label><select id="pred-sex"><option value="male" selected>Male</option><option value="female">Female</option></select></div>
+            <div class="demo-input-group"><label>Age</label><input id="pred-age" type="number" value="28" style="width:60px;"></div>
+            <div class="demo-input-group"><label>Fare ($)</label><input id="pred-fare" type="number" value="15" style="width:70px;"></div>
+            <div class="demo-input-group"><label>Siblings/Spouses</label><input id="pred-sibsp" type="number" value="0" style="width:50px;"></div>
+            <div class="demo-input-group"><label>Parents/Children</label><input id="pred-parch" type="number" value="0" style="width:50px;"></div>
+            <button class="btn btn-orange btn-sm" id="btn-stage-4" onclick="runStage4()">Predict</button>
+          </div>
+          <div id="stage-4-result" style="display:none;"></div>
+        </div>
+      </div>
     </div>
-    <div class="prompt-snippet" id="pipeline-prompt">
-      <div class="mono" style="font-size:0.72rem; max-width:500px; margin:0 auto; text-align:left;">
-        <span class="kw">system:</span> <span class="str">"Recommend models for {task_type}</span><br>
-        <span class="str">&nbsp;&nbsp;with {n_rows} rows, {n_features} features"</span><br>
-        <span class="cm">// + 5 retrieved sklearn doc chunks</span>
+
+    <!-- Footer: get started -->
+    <div style="text-align:center; margin-top:16px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Get started</span><br>
+          <span class="fn">docker compose up -d</span> <span class="str">&amp;&amp;</span> <span class="fn">python -m src.app</span><br>
+          <span class="cm"># Open http://192.168.1.33:7860</span>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 6: DATASET ANALYZER — Decision Tree ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 6: LIVE METAFLOW DEMO ════════════════════════ -->
 <div class="slide" data-slide="5">
-  <div class="inner" style="align-items:center; position:relative;">
-    <div class="eyebrow" style="color:var(--indigo);">Behind the Scenes &middot; Agent 2</div>
-    <h2 style="margin-bottom:8px;">How the Dataset Analyzer decides SFT vs DPO vs GRPO</h2>
-    <div class="dtree-container" id="dtree">
-      <svg id="dtree-svg" viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg"></svg>
-      <div class="dtree-output" id="dtree-output"></div>
+  <div class="inner" style="align-items:center;">
+    <div class="eyebrow" style="color:var(--indigo);">Live Demo &middot; Metaflow</div>
+    <h2 style="margin-bottom:4px;">Orchestrate ML Workflows with Metaflow</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Real-time pipeline visualization, step tracking, and run history.</p>
+    
+    <!-- Metaflow status indicator -->
+    <div id="metaflow-status" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="status-dot" id="mf-status-dot"></span>
+      <span id="mf-status-text" style="font-size:0.78rem; color:var(--text-dim);">Checking Metaflow service...</span>
     </div>
-    <div class="dtree-buttons">
-      <button class="dtree-btn" onclick="triggerDTree('sft')">Try: Chat Data (SFT)</button>
-      <button class="dtree-btn" onclick="triggerDTree('dpo')">Try: Preference Data (DPO)</button>
-      <button class="dtree-btn" onclick="triggerDTree('grpo')">Try: Reward Data (GRPO)</button>
+
+    <!-- Demo flow container -->
+    <div class="demo-flow">
+      <!-- Stage 1: Flow Selection -->
+      <div class="demo-stage visible" id="mf-stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Select a Metaflow Pipeline</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Choose a training flow to visualize its execution graph.</p>
+          <div class="demo-input-row">
+            <select id="mf-flow-select" style="padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem;">
+              <option value="MLTrainingFlow">MLTrainingFlow — Tabular AutoML</option>
+              <option value="LLMTrainingFlow">LLMTrainingFlow — Fine-tuning (SFT/DPO/GRPO)</option>
+            </select>
+            <button class="btn btn-indigo btn-sm" id="btn-mf-stage-1" onclick="loadMetaflowFlow()">Load Flow</button>
+          </div>
+          <div class="demo-stage-output" id="mf-out-1" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Pipeline Visualization -->
+      <div class="demo-stage" id="mf-stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Pipeline Steps & Execution Graph</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Each step is a @step-decorated function that runs independently.</p>
+          <div id="mf-pipeline-viz" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px;"></div>
+          <div class="demo-stage-output" id="mf-out-2" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Run History -->
+      <div class="demo-stage" id="mf-stage-3">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">3</div>
+          <div class="demo-stage-title">Recent Runs & Status</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Track completed, running, and failed runs with step-level details.</p>
+          <div id="mf-runs-table" style="font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.7rem; width:100%;"></div>
+          <button class="btn btn-indigo btn-sm" id="btn-mf-trigger" onclick="triggerMetaflowRun()" style="margin-top:10px;">+ Trigger New Run</button>
+          <div class="demo-stage-output" id="mf-out-3" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Step Cards -->
+      <div class="demo-stage" id="mf-stage-4">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">4</div>
+          <div class="demo-stage-title">Metaflow Cards — Rich Artifacts</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">@card decorators automatically capture metrics, tables, and markdown.</p>
+          <div id="mf-cards-display" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center; margin-top:16px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Run a flow locally</span><br>
+          <span class="fn">python -m src.flows.ml_training_flow run</span> <span class="str">--data-path data.csv</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 7: ERROR INVESTIGATION — D3 State Machine ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 7: LIVE QDRANT DEMO — Vector Search ════════════════════════ -->
 <div class="slide" data-slide="6">
   <div class="inner" style="align-items:center;">
-    <div class="eyebrow" style="color:var(--red);">Behind the Scenes &middot; Agent 3</div>
-    <h2 style="margin-bottom:4px;">The Error Investigation Agent</h2>
-    <p class="subtitle" style="font-size:1rem; margin-bottom:12px;">When training fails, this agent automatically searches the internet for solutions, checks if they're good enough, and writes step-by-step fix instructions.</p>
-    <div id="d3-graph-container"></div>
-    <div style="display:flex; align-items:center; gap:24px;">
-      <button class="graph-replay-btn" id="graph-replay-btn" onclick="replayGraphToken(true)">Replay (Retry Path)</button>
-      <div class="graph-iter-counter" id="graph-iter">Iteration: 1 / 3</div>
+    <div class="eyebrow" style="color:var(--cyan);">Live Demo &middot; Qdrant Vector DB</div>
+    <h2 style="margin-bottom:4px;">Retrieval-Augmented Generation Knowledge Base</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Semantic search over ML documentation, training guides, and error solutions.</p>
+    
+    <!-- Qdrant status indicator -->
+    <div id="qdrant-status" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="status-dot" id="qd-status-dot"></span>
+      <span id="qd-status-text" style="font-size:0.78rem; color:var(--text-dim);">Connecting to Qdrant...</span>
+    </div>
+
+    <!-- Collection stats -->
+    <div id="qdrant-collections" style="display:flex; gap:12px; margin-bottom:16px;"></div>
+
+    <!-- Demo flow -->
+    <div class="demo-flow">
+      <!-- Stage 1: Search -->
+      <div class="demo-stage visible" id="qd-stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Search Knowledge Base</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Enter a query to find relevant ML documentation or error solutions.</p>
+          <div class="demo-input-row">
+            <input id="qdrant-query" placeholder="e.g., how to fix CUDA OOM, SVM parameters, GRPO reward..." style="flex:1; padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem;">
+            <button class="btn btn-cyan btn-sm" id="btn-qd-search" onclick="searchQdrant()">Search</button>
+          </div>
+          <div class="demo-stage-output" id="qd-out-1" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Results + Vector Space -->
+      <div class="demo-stage" id="qd-stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Retrieved Documents</div>
+        </div>
+        <div class="demo-stage-body">
+          <div style="display:flex; gap:14px; align-items:flex-start; width:100%;">
+            <canvas id="vector-scatter-canvas" width="260" height="260" style="flex:0 0 260px; background:var(--surface); border:1px solid var(--border); border-radius:8px;"></canvas>
+            <div id="qdrant-results" style="max-height:280px; overflow-y:auto; flex:1; min-width:0;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center; margin-top:12px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Qdrant REST API</span><br>
+          <span class="fn">curl http://192.168.1.33:6333/collections</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 8: UX — Split-Screen Animation ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 8: LIVE LANGFUSE DEMO — Observability & Tracing ════════════════════════ -->
 <div class="slide" data-slide="7">
   <div class="inner" style="align-items:center;">
-    <div class="eyebrow" style="color:var(--green);">The Experience</div>
-    <h2 style="margin-bottom:14px;">Complexity hidden, simplicity delivered</h2>
-    <div class="split-screen" id="split-screen">
-      <!-- Left: What you do -->
-      <div class="split-half split-left">
-        <div class="split-title" style="color:var(--green);">What you do</div>
-        <div class="mock-step" id="mock-1"><span class="mock-step-icon">&#128193;</span> Upload CSV file</div>
-        <div class="mock-step" id="mock-2"><span class="mock-step-icon">&#9660;</span> Select target column</div>
-        <div class="mock-step" id="mock-3"><span class="mock-step-icon">&#9654;</span> Click "Train"</div>
-        <div class="mock-step" id="mock-4"><span class="mock-step-icon">&#10003;</span> Download model.zip</div>
-        <div class="click-counter" id="click-counter">0</div>
+    <div class="eyebrow" style="color:var(--amber);">Live Demo &middot; Langfuse Observability</div>
+    <h2 style="margin-bottom:4px;">Every AI Decision Traced & Measured</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Real-time tracing of agent calls, LLM interactions, and quality scores.</p>
+
+    <!-- Langfuse status indicator -->
+    <div id="langfuse-status" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="status-dot" id="lf-status-dot"></span>
+      <span id="lf-status-text" style="font-size:0.78rem; color:var(--text-dim);">Connecting to Langfuse...</span>
+    </div>
+
+    <!-- Demo flow -->
+    <div class="demo-flow">
+      <!-- Stage 1: Trace List -->
+      <div class="demo-stage visible" id="lf-stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Recent Traces & Sessions</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Click a trace to see full details including prompts, generations, and scores.</p>
+          <div id="langfuse-traces" style="max-height:220px; overflow-y:auto;"></div>
+        </div>
       </div>
-      <!-- Right: What happens underneath -->
-      <div class="split-half split-right">
-        <div class="split-title" style="color:var(--orange);">What happens underneath</div>
-        <div class="gantt-bar-row"><span class="gantt-label">Check your data</span><div class="gantt-track"><div class="gantt-fill" data-width="2%" style="background:var(--orange);"></div></div><span class="gantt-time">120ms</span></div>
-        <div class="gantt-bar-row"><span class="gantt-label">Convert to searchable format</span><div class="gantt-track"><div class="gantt-fill" data-width="5.5%" style="background:var(--cyan);"></div></div><span class="gantt-time">340ms</span></div>
-        <div class="gantt-bar-row"><span class="gantt-label">Find similar past projects</span><div class="gantt-track"><div class="gantt-fill" data-width="1.4%" style="background:var(--cyan);"></div></div><span class="gantt-time">85ms</span></div>
-        <div class="gantt-bar-row"><span class="gantt-label">AI picks best models</span><div class="gantt-track"><div class="gantt-fill" data-width="19%" style="background:var(--indigo);"></div></div><span class="gantt-time">1.2s</span></div>
-        <div class="gantt-bar-row"><span class="gantt-label">Build &amp; test models</span><div class="gantt-track"><div class="gantt-fill" data-width="72%" style="background:var(--orange);"></div></div><span class="gantt-time">4.5s</span></div>
-        <div class="gantt-bar-row"><span class="gantt-label">Log everything</span><div class="gantt-track"><div class="gantt-fill" data-width="0.8%" style="background:var(--amber);"></div></div><span class="gantt-time">50ms</span></div>
-        <div class="split-stats" id="split-stats">
-          <span>6+ AI decisions</span>
-          <span>8 services coordinated</span>
+
+      <!-- Stage 2: Trace Detail -->
+      <div class="demo-stage" id="lf-stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Trace Details</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Full breakdown of the selected trace with latency, tokens, and scores.</p>
+          <div id="langfuse-detail" style="max-height:300px; overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Score Dashboard -->
+      <div class="demo-stage" id="lf-stage-3">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">3</div>
+          <div class="demo-stage-title">Quality Scores & Metrics</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Track quality across sessions with automated scoring.</p>
+          <div id="langfuse-scores" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center; margin-top:12px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Langfuse Dashboard</span><br>
+          <span class="fn">open http://192.168.1.33:3000</span>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 9: OBSERVABILITY — Waterfall + Radar ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 9: LIVE LLM TRAINING DEMO — SFT/DPO/GRPO ════════════════════════ -->
 <div class="slide" data-slide="8">
   <div class="inner" style="align-items:center;">
-    <div class="eyebrow" style="color:var(--amber);">Trust &amp; Verify</div>
-    <h2 style="margin-bottom:16px;">Every decision traced. Every retrieval measured.</h2>
-    <div class="obs-layout">
-      <!-- Left: Trace Waterfall -->
-      <div>
-        <h3 style="color:var(--amber); font-size:0.9rem; margin-bottom:4px;">Timeline: What happens during one request</h3>
-        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:12px;">Every step is automatically logged so you can see exactly where time is spent</p>
-        <div class="waterfall-container" id="waterfall">
-          <div class="waterfall-row">
-            <span class="waterfall-label">Convert query to searchable format</span>
-            <div class="waterfall-track"><div class="waterfall-bar" data-width="5.4%" style="background:var(--cyan);"></div></div>
-            <span class="waterfall-dur">340ms</span>
-          </div>
-          <div class="waterfall-row">
-            <span class="waterfall-label">Search knowledge base</span>
-            <div class="waterfall-track"><div class="waterfall-bar" data-width="1.3%" style="background:var(--cyan); left:5.4%;"></div></div>
-            <span class="waterfall-dur">85ms</span>
-          </div>
-          <div class="waterfall-row">
-            <span class="waterfall-label">AI picks best models</span>
-            <div class="waterfall-track"><div class="waterfall-bar" data-width="19%" style="background:var(--indigo); left:6.7%;"></div></div>
-            <span class="waterfall-dur">1.2s</span>
-          </div>
-          <div class="waterfall-row">
-            <span class="waterfall-label">Build &amp; test models</span>
-            <div class="waterfall-track"><div class="waterfall-bar" data-width="71.4%" style="background:var(--orange); left:25.7%;"></div></div>
-            <span class="waterfall-dur">4.5s</span>
-          </div>
-          <div class="waterfall-row">
-            <span class="waterfall-label">Save results to log</span>
-            <div class="waterfall-track"><div class="waterfall-bar" data-width="0.8%" style="background:var(--amber); left:97.1%;"></div></div>
-            <span class="waterfall-dur">50ms</span>
-          </div>
-        </div>
-        <div class="waterfall-total">Total: <strong>6.3s</strong></div>
+    <div class="eyebrow" style="color:var(--purple);">Live Demo &middot; LLM Fine-Tuning</div>
+    <h2 style="margin-bottom:4px;">Train Custom Models with SFT, DPO, GRPO</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Supervised Fine-Tuning, Direct Preference Optimization, and Group Relative Policy Optimization.</p>
+
+    <!-- Training method cards -->
+    <div id="llm-method-cards" style="display:flex; gap:12px; margin-bottom:16px;">
+      <div class="method-card" data-method="sft" onclick="selectTrainingMethod('sft')">
+        <div class="method-icon">📝</div>
+        <div class="method-title">SFT</div>
+        <div class="method-desc">Supervised Fine-Tuning</div>
       </div>
-      <!-- Right: Radar Chart -->
-      <div class="radar-container">
-        <h3 style="color:var(--cyan); font-size:0.9rem; margin-bottom:4px;">How well does the AI find relevant info?</h3>
-        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:12px;">Compares 3 search strategies on accuracy, relevance, and completeness</p>
-        <canvas id="ragas-radar" width="360" height="320"></canvas>
-        <div style="display:flex; gap:8px; margin-top:10px;">
-          <span class="tag tag-cyan">Dense (meaning-based)</span>
-          <span class="tag tag-indigo">Sparse (keyword-based)</span>
-          <span class="tag tag-amber">Hybrid (both combined)</span>
+      <div class="method-card" data-method="dpo" onclick="selectTrainingMethod('dpo')">
+        <div class="method-icon">⚖️</div>
+        <div class="method-title">DPO</div>
+        <div class="method-desc">Direct Preference Optimization</div>
+      </div>
+      <div class="method-card" data-method="grpo" onclick="selectTrainingMethod('grpo')">
+        <div class="method-icon">🎯</div>
+        <div class="method-title">GRPO</div>
+        <div class="method-desc">Group Relative Policy Optimization</div>
+      </div>
+    </div>
+
+    <!-- Demo flow -->
+    <div class="demo-flow" id="llm-training-flow">
+      <!-- Stage 1: Select training method -->
+      <div class="demo-stage visible" id="llm-stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Choose Training Method</div>
         </div>
-        <button class="btn btn-orange btn-sm" style="margin-top:10px;" onclick="runLiveRagas()">Run Live</button>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Select a fine-tuning approach based on your data and goals.</p>
+          <select id="training-method" onchange="showMethodExplanation(this.value)" style="padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem; width:100%;">
+            <option value="">-- Select method --</option>
+            <option value="sft">SFT — Supervised Fine-Tuning (instruction-following)</option>
+            <option value="dpo">DPO — Direct Preference Optimization (alignment)</option>
+            <option value="grpo">GRPO — Group Relative Policy Optimization (reward-based)</option>
+          </select>
+          <div id="method-explanation" style="margin-top:8px; display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Configure training -->
+      <div class="demo-stage" id="llm-stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Configure Training Parameters</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Set base model, hyperparameters, and dataset format.</p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="demo-input-group">
+              <label>Base Model</label>
+              <select id="base-model" style="width:100%;">
+                <option value="Qwen/Qwen2.5-0.5B">Qwen2.5-0.5B</option>
+                <option value="meta-llama/Llama-3.2-1B">Llama-3.2-1B</option>
+                <option value="meta-llama/Llama-3.1-8B">Llama-3.1-8B</option>
+                <option value="mistralai/Mistral-7B-v0.1">Mistral-7B</option>
+              </select>
+            </div>
+            <div class="demo-input-group">
+              <label>Epochs</label>
+              <input id="train-epochs" type="number" value="3" min="1" max="10" style="width:100%;">
+            </div>
+            <div class="demo-input-group">
+              <label>Learning Rate</label>
+              <select id="learning-rate" style="width:100%;">
+                <option value="5e-5">5e-5 (conservative)</option>
+                <option value="1e-4" selected>1e-4 (recommended)</option>
+                <option value="2e-4">2e-4 (aggressive)</option>
+              </select>
+            </div>
+            <div class="demo-input-group">
+              <label>Batch Size</label>
+              <select id="batch-size" style="width:100%;">
+                <option value="8">8</option>
+                <option value="16" selected>16</option>
+                <option value="32">32</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-purple btn-sm" id="btn-llm-train" onclick="startLLMTraining()" style="margin-top:12px;">Start Training</button>
+        </div>
+      </div>
+
+      <!-- Stage 3: Training progress -->
+      <div class="demo-stage" id="llm-stage-3">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">3</div>
+          <div class="demo-stage-title">Training Progress</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Watch the model learn in real-time.</p>
+          <div id="training-progress" style="margin-top:8px;">
+            <!-- Progress bar -->
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+              <div style="flex:1; height:8px; background:var(--surface2); border-radius:4px; overflow:hidden;">
+                <div id="train-progress-bar" style="width:0%; height:100%; background:linear-gradient(90deg, var(--purple), var(--indigo)); transition:width 0.3s;"></div>
+              </div>
+              <span id="train-progress-pct" style="font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.75rem; color:var(--text);">0%</span>
+            </div>
+            <!-- Loss chart -->
+            <div id="loss-chart-container" style="height:120px; background:#282828; border-radius:8px; padding:12px; position:relative; border:1px solid rgba(235,219,178,0.06);">
+              <canvas id="loss-canvas" width="400" height="96"></canvas>
+              <div id="loss-labels" style="position:absolute; top:4px; right:8px; font-size:0.62rem;"></div>
+            </div>
+            <!-- Metrics -->
+            <div id="training-metrics" style="display:flex; gap:16px; margin-top:10px; flex-wrap:wrap;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Results -->
+      <div class="demo-stage" id="llm-stage-4">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">4</div>
+          <div class="demo-stage-title">Training Complete — Adapter Ready</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Your fine-tuned adapter is ready for inference.</p>
+          <div id="training-results" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+          <!-- Inference demo -->
+          <div id="inference-demo" style="display:none; margin-top:14px; padding:14px; background:var(--surface); border:1px solid var(--gold-border); border-radius:10px;">
+            <div style="font-size:0.78rem; font-weight:700; color:var(--gold); margin-bottom:8px;">Try Your Fine-Tuned Model</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="inference-input" type="text" value="How do I build an agent?" style="flex:1; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.75rem; font-family:var(--mono);">
+              <button id="btn-inference" class="btn btn-sm" style="background:var(--gold); color:#1a1a1a; font-weight:700;" onclick="runInference()">Generate</button>
+            </div>
+            <div id="inference-output" style="display:none; margin-top:10px; background:#1d2021; padding:10px 14px; border-radius:6px; font-family:var(--mono); font-size:0.7rem; color:#ebdbb2; line-height:1.6; min-height:2em;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center; margin-top:12px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Run LLM training</span><br>
+          <span class="fn">python -m src.flows.llm_training_flow run</span> <span class="str">--method sft</span>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ════════════════════════ SLIDE 10: LIVE DEMO — Health Rings + Tabbed Playground ════════════════════════ -->
+<!-- ════════════════════════ SLIDE 10: LIVE ERROR INVESTIGATION AGENT ════════════════════════ -->
 <div class="slide" data-slide="9">
   <div class="inner" style="align-items:center;">
-    <div class="eyebrow" style="color:var(--orange);">Live Demo</div>
-    <h2 style="margin-bottom:6px;">See it running</h2>
-    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:14px;">All 8 services running in Docker — green means healthy, red means down</p>
-    <!-- Health ring dashboard -->
-    <div class="health-rings" id="health-rings"></div>
-    <button class="btn btn-orange btn-sm" onclick="checkHealthRings()" style="margin-bottom:16px;">Refresh Health</button>
-    <!-- Tabbed API playground -->
-    <div style="width:100%; max-width:900px;">
-      <div class="api-tabs">
-        <div class="api-tab active" onclick="switchTab(0)">Analyze a Spreadsheet</div>
-        <div class="api-tab" onclick="switchTab(1)">Detect Training Format</div>
-        <div class="api-tab" onclick="switchTab(2)">Measure Search Quality</div>
-      </div>
-      <div class="api-tab-content active" id="tab-0">
-        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">Upload any CSV and the agent profiles your data — columns, types, missing values, and what models might work.</p>
-        <div style="display:flex; gap:10px; align-items:end;">
-          <div style="flex:1;"><label style="font-size:0.75rem; color:var(--text-dim);">CSV URL</label>
-            <input id="csv-url" value="https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv" style="padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.8rem; width:100%;">
+    <div class="eyebrow" style="color:var(--red);">Live Demo &middot; Error Investigation Agent</div>
+    <h2 style="margin-bottom:4px;">When Training Fails, Agents Find Solutions</h2>
+    <p style="color:var(--text-dim); font-size:0.78rem; margin-bottom:10px;">Multi-agent system searches knowledge base + web to diagnose and fix errors.</p>
+
+    <!-- Agent brain canvas -->
+    <canvas id="agent-brain-canvas" width="960" height="60" style="width:100%; max-width:960px; height:60px; margin-bottom:8px;"></canvas>
+
+    <!-- Status -->
+    <div id="error-agent-status" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="status-dot" id="err-status-dot"></span>
+      <span id="err-status-text" style="font-size:0.78rem; color:var(--text-dim);">Agent ready</span>
+    </div>
+
+    <!-- Demo flow -->
+    <div class="demo-flow" style="position:relative;">
+      <!-- Stage 1: Select Error -->
+      <div class="demo-stage visible" id="err-stage-1">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">1</div>
+          <div class="demo-stage-title">Select Training Error to Investigate</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Choose a common ML/LLM training error for the agent to investigate.</p>
+          <select id="error-type-select" style="padding:6px 10px; background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.78rem; width:100%;">
+            <option value="">-- Select an error --</option>
+            <option value="cuda_oom">CUDA out of memory — RuntimeError during training</option>
+            <option value="nan_loss">NaN loss — Training diverged, loss became NaN</option>
+            <option value="dim_mismatch">Dimension mismatch — Shape error in model forward pass</option>
+            <option value="keyerror_labels">KeyError 'labels' — Missing field in dataset pipeline</option>
+            <option value="gradient_explosion">Gradient explosion — Loss spikes to infinity</option>
+          </select>
+          <div id="error-details" style="margin-top:10px; display:none;">
+            <div class="term-chrome">
+              <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span></span> <span class="term-chrome-title">traceback</span></div>
+              <div style="background:#282828; padding:8px 12px; font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.7rem; border-radius:0 0 8px 8px;">
+                <div id="error-traceback" style="color:#fb4934; white-space:pre-wrap;"></div>
+              </div>
+            </div>
           </div>
-          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeCSV()">Analyze</button>
         </div>
-        <div class="api-terminal" id="tab-0-out"><span class="req">POST /api/handle_csv_upload</span></div>
       </div>
-      <div class="api-tab-content" id="tab-1">
-        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">The agent examines your dataset and automatically detects which training method to use.</p>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('sft')">Try: Chat Data (SFT)</button>
-          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('dpo')">Try: Preference Data (DPO)</button>
-          <button class="btn btn-orange btn-sm" onclick="tabAnalyzeLLM('grpo')">Try: Reward Data (GRPO)</button>
+
+      <!-- Stage 2: Agent Searches -->
+      <div class="demo-stage" id="err-stage-2">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">2</div>
+          <div class="demo-stage-title">Agent Investigates — Knowledge Base + Web Search</div>
         </div>
-        <div class="api-terminal" id="tab-1-out"><span class="req">POST /api/handle_llm_dataset_upload</span></div>
-      </div>
-      <div class="api-tab-content" id="tab-2">
-        <p style="color:var(--text-dim); font-size:0.72rem; margin-bottom:8px;">Tests how accurately the system finds relevant information — measures if answers are correct, relevant, and complete.</p>
-        <div style="display:flex; gap:10px; align-items:end;">
-          <div><label style="font-size:0.75rem; color:var(--text-dim);">Search Strategy</label>
-            <select id="ragas-method" style="padding:7px 10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.8rem;">
-              <option value="dense">Dense</option>
-              <option value="sparse">Sparse (BM25)</option>
-              <option value="hybrid" selected>Hybrid (RRF)</option>
-            </select>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Multi-agent pipeline searches Qdrant, SearXNG, and fetches documentation.</p>
+          <div class="term-chrome">
+            <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span></span> <span class="term-chrome-title">agent</span></div>
+            <div id="agent-progress" style="background:#282828; padding:10px 14px; font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.7rem; color:#ebdbb2; border-radius:0 0 8px 8px;">
+              <div id="progress-analyze" class="agent-step" style="color:#fabd2f;">⏳ Analyzing error context...</div>
+              <div id="progress-kb" class="agent-step" style="display:none; color:#fabd2f;">🔍 Searching knowledge base (Qdrant)...</div>
+              <div id="progress-web" class="agent-step" style="display:none; color:#fabd2f;">🌐 Querying web search (SearXNG @ :4000)...</div>
+              <div id="progress-eval" class="agent-step" style="display:none; color:#fabd2f;">📊 Evaluating solution relevance...</div>
+            </div>
           </div>
-          <button class="btn btn-orange btn-sm" onclick="tabRunRagas()">Evaluate</button>
+          <div id="search-results" style="margin-top:10px; max-height:200px; overflow-y:auto;"></div>
         </div>
-        <div class="api-terminal" id="tab-2-out"><span class="req">POST /api/run_ragas_evaluation</span></div>
+      </div>
+
+      <!-- Stage 3: Solutions Evaluated -->
+      <div class="demo-stage" id="err-stage-3">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">3</div>
+          <div class="demo-stage-title">LLM Filters & Ranks Solutions</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Agent uses LLM to evaluate relevance and filter out low-quality results.</p>
+          <div id="solution-eval" style="font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.7rem;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 4: Fix Instructions -->
+      <div class="demo-stage" id="err-stage-4">
+        <div class="demo-stage-header">
+          <div class="demo-stage-num">4</div>
+          <div class="demo-stage-title">Step-by-Step Fix Generated</div>
+        </div>
+        <div class="demo-stage-body">
+          <p style="margin:0 0 8px 0; font-size:0.72rem;">Actionable fix with code snippets and configuration changes.</p>
+          <div id="fix-instructions" style="background:#282828; border-left:3px solid #b8bb26; padding:10px 12px; font-family:'IBM Plex Mono','JetBrains Mono',ui-monospace,monospace; font-size:0.68rem; color:#ebdbb2; border-radius:4px;"></div>
+        </div>
       </div>
     </div>
-    <div style="text-align:center; margin-top:20px;">
-      <div class="mono" style="display:inline-block; text-align:left; max-width:500px;">
+
+    <!-- Footer -->
+    <div style="text-align:center; margin-top:12px;">
+      <div class="term-chrome" style="display:inline-block; text-align:left; max-width:500px;">
+        <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span></span> <span class="term-chrome-title">python</span></div>
+        <div class="mono" style="font-size:0.68rem; border-radius:0 0 8px 8px; border-top:none;">
+          <span class="cm"># Error investigation flow</span><br>
+          <span class="fn">investigate_error(error, traceback)</span> <span class="str">→ recommendation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════ SLIDE 11: WRAP UP — Summary & CTA ════════════════════════ -->
+<div class="slide" data-slide="10">
+  <div class="orb-glow"></div>
+  <canvas class="ascii-orb" id="ascii-orb-10" width="1320" height="1320"></canvas>
+  <div class="center stagger">
+    <div class="eyebrow" style="color:var(--gold);">Thank You</div>
+    <h2>Everything you saw was <span class="gradient">live &amp; real</span></h2>
+
+    <!-- Journey timeline -->
+    <div class="journey-timeline" id="journey-timeline">
+      <canvas class="journey-line-canvas" id="journey-line-canvas" width="960" height="6"></canvas>
+      <div class="journey-nodes">
+        <div class="journey-node" data-color="var(--orange)">
+          <div class="journey-node-dot" style="border-color:var(--orange);"></div>
+          <div class="journey-node-label">AutoML</div>
+          <div class="journey-node-metric" style="color:var(--orange);">87.3% acc</div>
+        </div>
+        <div class="journey-node" data-color="var(--indigo)">
+          <div class="journey-node-dot" style="border-color:var(--indigo);"></div>
+          <div class="journey-node-label">Metaflow</div>
+          <div class="journey-node-metric" style="color:var(--indigo);">8 steps</div>
+        </div>
+        <div class="journey-node" data-color="var(--cyan)">
+          <div class="journey-node-dot" style="border-color:var(--cyan);"></div>
+          <div class="journey-node-label">Qdrant</div>
+          <div class="journey-node-metric" style="color:var(--cyan);">Vector search</div>
+        </div>
+        <div class="journey-node" data-color="var(--amber)">
+          <div class="journey-node-dot" style="border-color:var(--amber);"></div>
+          <div class="journey-node-label">Langfuse</div>
+          <div class="journey-node-metric" style="color:var(--amber);">Full traces</div>
+        </div>
+        <div class="journey-node" data-color="#a855f7">
+          <div class="journey-node-dot" style="border-color:#a855f7;"></div>
+          <div class="journey-node-label">Fine-Tuning</div>
+          <div class="journey-node-metric" style="color:#a855f7;">SFT/DPO/GRPO</div>
+        </div>
+        <div class="journey-node" data-color="var(--red)">
+          <div class="journey-node-dot" style="border-color:var(--red);"></div>
+          <div class="journey-node-label">Error Agent</div>
+          <div class="journey-node-metric" style="color:var(--red);">Self-healing</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Value proposition cards -->
+    <div class="value-cards">
+      <div class="value-card" id="value-veox">
+        <div class="value-card-name" style="color:#22d3ee;">Veox</div>
+        <div class="value-card-desc">Autonomous AI algorithm factory — using generative AI to invent and evolve novel algorithms tailored to enterprise data</div>
+      </div>
+      <div class="value-card" id="value-forge">
+        <div class="value-card-name" style="color:#f97316;">Forge Utah</div>
+        <div class="value-card-desc">Utah's not-for-profit tech community connecting programmers, engineers, and developers through meetups, roundtables, and conferences</div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="term-chrome wrapup-cta" style="display:inline-block; text-align:left;">
+      <div class="term-chrome-bar"><span class="term-prompt"><span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-host">dgx-spark</span> <span class="term-prompt-path">~/automl</span> <span class="term-prompt-line2">$</span></span></div>
+      <div class="mono" style="font-size:0.75rem; border-radius:0 0 8px 8px; border-top:none;">
         <span class="cm"># Get started</span><br>
-        <span class="fn">uv pip install</span> <span class="str">-e .</span><br>
-        <span class="fn">docker compose</span> <span class="str">up -d</span><br>
-        <span class="fn">python</span> <span class="str">-m src.retrieval.indexer</span><br>
-        <span class="cm"># Open http://localhost:7860</span>
+        <span class="fn">docker compose up -d</span> <span class="str">&amp;&amp;</span> <span class="fn">python -m src.app</span>
       </div>
     </div>
+
+    <p style="margin-top:20px; color:var(--text-dim); font-size:0.85rem;">AI Makerspace &middot; Cohort 9</p>
   </div>
 </div>
 
 </div><!-- /deck -->
 
-<div class="counter"><span id="current">1</span> / <span id="total">10</span></div>
+<div class="counter"><span id="current">1</span> / <span id="total">11</span></div>
 <div class="nav-hint"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> or <kbd>Space</kbd></div>
 
-<script src="engine.js"></script>
+<script src="engine.js?v=1773468615"></script>
 <script src="js/slide01.js"></script>
 <script src="js/slide02.js"></script>
 <script src="js/slide03.js"></script>
 <script src="js/slide04.js"></script>
-<script src="js/slide05.js"></script>
+<script src="js/slide05.js?v=1773468615"></script>
 <script src="js/slide06.js"></script>
-<script src="js/slide07.js"></script>
+<script src="js/slide07.js?v=2"></script>
 <script src="js/slide08.js"></script>
 <script src="js/slide09.js"></script>
 <script src="js/slide10.js"></script>
+<script src="js/slide11.js?v=1773468615"></script>
+<script src="js/ascii-orb.js"></script>
+
 <script src="init.js"></script>
 </body>
 </html>
