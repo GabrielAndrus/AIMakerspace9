@@ -797,25 +797,23 @@
     100% { opacity: 0; transform: translateY(-200px); }
   }
 
-  /* ══════════ SLIDE 3: Solution — 3-Column Layout ══════════ */
+  /* ══════════ SLIDE 3: Solution — Platform & Stack ══════════ */
   .solution-columns {
-    display: flex; gap: 20px; width: 100%; max-width: 1050px; align-items: flex-start;
+    display: flex; gap: 36px; width: 100%; max-width: 1200px; align-items: flex-start;
+    justify-content: center;
   }
   .solution-col {
     flex: 1; display: flex; flex-direction: column; align-items: center;
   }
-  .solution-col-platform { flex: 0 0 32%; }
-  .solution-col-agents   { flex: 0 0 34%; }
-  .solution-col-customers { flex: 0 0 32%; }
   .solution-col-label {
-    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
-    color: var(--text-dim); margin-bottom: 10px;
+    font-size: 1.2rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text-dim); margin-bottom: 16px;
   }
   .solution-service-tags {
-    display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 6px;
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px;
   }
   .solution-service-tag {
-    font-size: 0.58rem; font-family: var(--mono); padding: 2px 7px; border-radius: 4px;
+    font-size: 0.9rem; font-family: var(--mono); padding: 6px 14px; border-radius: 5px;
     background: var(--surface2); color: var(--text-sec); border: 1px solid var(--border);
     opacity: 0; transform: translateY(4px);
     transition: opacity 0.3s, transform 0.3s;
@@ -823,17 +821,17 @@
   .solution-service-tag.visible { opacity: 1; transform: translateY(0); }
 
   .customer-card {
-    background: var(--surface); border: 1px solid var(--gold-border); border-radius: 10px;
-    padding: 14px 16px; margin-bottom: 10px; width: 100%;
+    background: var(--surface); border: 1px solid var(--gold-border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 16px; width: 100%;
     opacity: 0; transform: translateX(20px);
     transition: opacity 0.5s, transform 0.5s;
   }
   .customer-card.visible { opacity: 1; transform: translateX(0); }
   .customer-card-name {
-    font-size: 0.82rem; font-weight: 700; margin-bottom: 5px;
+    font-size: 1.6rem; font-weight: 700; margin-bottom: 10px;
   }
   .customer-card-desc {
-    font-size: 0.68rem; color: var(--text-sec); line-height: 1.5;
+    font-size: 1.1rem; color: var(--text-sec); line-height: 1.6;
   }
 
   /* ══════════ SLIDE 5: Animated Pipeline ══════════ */
@@ -1027,7 +1025,7 @@
   .demo-stage-title {
     font-size: 0.85rem; font-weight: 700; color: var(--text);
   }
-  .demo-stage-body { font-size: 0.78rem; color: var(--text-sec); line-height: 1.6; }
+  .demo-stage-body { font-size: 0.78rem; color: var(--text-sec); line-height: 1.6; overflow-y: auto; }
   .demo-stage-output {
     font-family: var(--mono); font-size: 0.72rem;
     background: #282828; border: 1px solid rgba(235,219,178,0.06);
@@ -1055,9 +1053,19 @@
     padding-top: 48px;
     padding-bottom: 48px;
   }
+  .slide[data-slide="4"].active,
+  .slide[data-slide="5"].active,
+  .slide[data-slide="6"].active,
+  .slide[data-slide="7"].active,
+  .slide[data-slide="8"].active,
   .slide[data-slide="9"].active {
     overflow-y: auto;
   }
+  .slide[data-slide="4"] .inner,
+  .slide[data-slide="5"] .inner,
+  .slide[data-slide="6"] .inner,
+  .slide[data-slide="7"] .inner,
+  .slide[data-slide="8"] .inner,
   .slide[data-slide="9"] .inner {
     max-height: none;
     margin: auto 0;

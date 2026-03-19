@@ -8,10 +8,10 @@ var ARCH_SERVICES = [
   { name: 'Langfuse',   port: ':3000', color: '#f59e0b', layer: 1, col: 1 },
   { name: 'Metaflow',   port: ':3001', color: '#10b981', layer: 1, col: 2 },
   // Bottom row intentionally uses the same col mapping but spread wider
-  { name: 'PostgreSQL', port: ':5432', color: '#928374', layer: 2, col: -0.1 },
-  { name: 'ClickHouse', port: ':8123', color: '#928374', layer: 2, col: 0.8 },
-  { name: 'Redis',      port: ':6379', color: '#928374', layer: 2, col: 1.7 },
-  { name: 'MinIO',      port: ':9090', color: '#928374', layer: 2, col: 2.6 }
+  { name: 'PostgreSQL', port: ':5432', color: '#928374', layer: 2, col: 0 },
+  { name: 'ClickHouse', port: ':8123', color: '#928374', layer: 2, col: 1 },
+  { name: 'Redis',      port: ':6379', color: '#928374', layer: 2, col: 2 },
+  { name: 'MinIO',      port: ':9090', color: '#928374', layer: 2, col: 3 }
 ];
 
 var ARCH_CONNECTIONS = [
@@ -26,30 +26,31 @@ var archAnimFrame = null;
 var archServiceLit = [];
 
 function getServicePos(svc, w, h) {
-  var padX = 60, padY = 50;
+  var padX = 100, padY = 70;
   var layerH = (h - padY * 2) / 2;
   var y = padY + svc.layer * layerH;
 
-  var colCount = svc.layer === 0 ? 1 : (svc.layer === 1 ? 3 : 4);
-  var colW = (w - padX * 2) / (svc.layer === 2 ? 3.5 : 2);
-  var startX = svc.layer === 0 ? w / 2 : padX + (svc.layer === 2 ? -10 : 0);
-  var x = svc.layer === 0 ? w / 2 : startX + svc.col * colW;
-
-  return { x: x, y: y };
+  if (svc.layer === 0) {
+    return { x: w / 2, y: y };
+  } else if (svc.layer === 1) {
+    var colW1 = (w - padX * 2) / 2;
+    return { x: padX + svc.col * colW1, y: y };
+  } else {
+    var colW2 = (w - padX * 2) / 3;
+    return { x: padX + svc.col * colW2, y: y };
+  }
 }
 
 function drawArchBox(ctx, x, y, label, port, color, lit) {
-  var bw = 90, bh = 40;
+  var bw = 160, bh = 70;
   var lx = x - bw / 2, ly = y - bh / 2;
 
   // Box-drawing style with ASCII corners
   ctx.strokeStyle = lit ? color : 'rgba(235,219,178,0.15)';
-  ctx.lineWidth = lit ? 1.5 : 1;
+  ctx.lineWidth = lit ? 2 : 1.5;
   ctx.strokeRect(lx, ly, bw, bh);
 
   if (lit) {
-    ctx.fillStyle = color.replace(')', ',0.06)').replace('#', 'rgba(');
-    // Simple hex→rgba
     var r = parseInt(color.slice(1,3), 16);
     var g = parseInt(color.slice(3,5), 16);
     var b = parseInt(color.slice(5,7), 16);
@@ -58,16 +59,16 @@ function drawArchBox(ctx, x, y, label, port, color, lit) {
   }
 
   // Label
-  ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+  ctx.font = 'bold 18px "IBM Plex Mono", monospace';
   ctx.fillStyle = lit ? color : 'rgba(235,219,178,0.4)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, x, y - 5);
+  ctx.fillText(label, x, y - 8);
 
   // Port
-  ctx.font = '9px "IBM Plex Mono", monospace';
+  ctx.font = '14px "IBM Plex Mono", monospace';
   ctx.fillStyle = lit ? 'rgba(235,219,178,0.5)' : 'rgba(235,219,178,0.2)';
-  ctx.fillText(port, x, y + 10);
+  ctx.fillText(port, x, y + 16);
 }
 
 function drawArchitecture(canvas, t) {
@@ -76,15 +77,15 @@ function drawArchitecture(canvas, t) {
   ctx.clearRect(0, 0, w, h);
 
   // Layer labels
-  ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+  ctx.font = 'bold 14px "IBM Plex Mono", monospace';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(249,115,22,0.5)';
-  ctx.fillText('USER INTERFACE', 10, 30);
+  ctx.fillText('USER INTERFACE', 16, 38);
   ctx.fillStyle = 'rgba(129,140,248,0.5)';
-  ctx.fillText('AI DECISION LAYER', 10, 155);
+  ctx.fillText('AI DECISION LAYER', 16, 225);
   ctx.fillStyle = 'rgba(255,255,255,0.2)';
-  ctx.fillText('STORAGE & LOGGING', 10, 290);
+  ctx.fillText('STORAGE & LOGGING', 16, 420);
 
   // Connections
   for (var c = 0; c < ARCH_CONNECTIONS.length; c++) {
@@ -98,18 +99,18 @@ function drawArchitecture(canvas, t) {
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 6]);
     ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y + 20);
-    ctx.lineTo(p2.x, p2.y - 20);
+    ctx.moveTo(p1.x, p1.y + 35);
+    ctx.lineTo(p2.x, p2.y - 35);
     ctx.stroke();
     ctx.setLineDash([]);
 
     // Arrow
-    var ax = p2.x, ay = p2.y - 22;
+    var ax = p2.x, ay = p2.y - 38;
     ctx.fillStyle = 'rgba(235,219,178,0.1)';
     ctx.beginPath();
-    ctx.moveTo(ax, ay + 4);
-    ctx.lineTo(ax - 3, ay - 2);
-    ctx.lineTo(ax + 3, ay - 2);
+    ctx.moveTo(ax, ay + 6);
+    ctx.lineTo(ax - 5, ay - 3);
+    ctx.lineTo(ax + 5, ay - 3);
     ctx.fill();
   }
 
@@ -129,10 +130,10 @@ function drawArchitecture(canvas, t) {
     var pf = getServicePos(ARCH_SERVICES[pc.from], w, h);
     var pt = getServicePos(ARCH_SERVICES[pc.to], w, h);
     var px = pf.x + (pt.x - pf.x) * pulse.progress;
-    var py = (pf.y + 20) + ((pt.y - 20) - (pf.y + 20)) * pulse.progress;
+    var py = (pf.y + 35) + ((pt.y - 35) - (pf.y + 35)) * pulse.progress;
 
     ctx.beginPath();
-    ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+    ctx.arc(px, py, 4, 0, Math.PI * 2);
     ctx.fillStyle = ARCH_SERVICES[pc.to].color;
     ctx.globalAlpha = 0.6;
     ctx.fill();

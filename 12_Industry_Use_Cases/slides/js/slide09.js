@@ -2,6 +2,8 @@
    SLIDE 9: LIVE LLM TRAINING DEMO — SFT/DPO/GRPO (slide index 8)
    ══════════════════════════════════════════════════════════════ */
 
+var PRETRAIN_RESPONSE = "To build an agent, you first need to identify the principal — that is, the person or business on whose behalf the agent will act. An agent is authorized to represent another party, like a deputy or representative. You might consider hiring an FBI agent if government work is involved, or a literary agent if you need someone to manage publishing deals. In chemistry, an agent is a substance that causes a reaction, so you could build one in a laboratory. In pharmacology, an agent is a drug capable of eliciting a biological response. In grammar, the agent is the noun phrase that performs the action of the verb. To build any of these agents, consult the relevant professional licensing authority in your jurisdiction.";
+
 let selectedMethod = null;
 let trainingInterval = null;
 let lossHistory = [];
@@ -344,6 +346,35 @@ var INFERENCE_RESPONSES = {
   grpo: "Start with a language model and a clear definition of what tools it can use — each tool should have a name, a description, and a schema for its inputs and outputs. Then implement a planning step where the model breaks the user's request into subtasks before acting. For each subtask, the model picks a tool, you execute it, and the model reviews the result before moving on. This plan-act-observe cycle continues until the task is complete. Good agents also include a self-reflection step after each tool call to catch mistakes early, and they maintain a scratchpad of intermediate results so they don't lose context on longer tasks."
 };
 
+function runPretrainInference() {
+  var btn = document.getElementById('btn-pretrain-inference');
+  var output = document.getElementById('pretrain-output');
+  if (!output || !btn) return;
+
+  btn.disabled = true;
+  btn.textContent = '...';
+  output.style.display = 'block';
+  output.innerHTML = '<span style="color:var(--gold);">Generating...</span>';
+
+  setTimeout(function() {
+    output.innerHTML = '';
+    var charIdx = 0;
+
+    function typeChar() {
+      if (charIdx < PRETRAIN_RESPONSE.length) {
+        output.textContent += PRETRAIN_RESPONSE[charIdx];
+        charIdx++;
+        setTimeout(typeChar, 18);
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Generate';
+      }
+    }
+
+    typeChar();
+  }, 500);
+}
+
 function runInference() {
   var btn = document.getElementById('btn-inference');
   var output = document.getElementById('inference-output');
@@ -423,6 +454,10 @@ function resetLLMDemo() {
   if (inferenceDemo) inferenceDemo.style.display = 'none';
   var inferenceOutput = document.getElementById('inference-output');
   if (inferenceOutput) { inferenceOutput.style.display = 'none'; inferenceOutput.innerHTML = ''; }
+  var pretrainOutput = document.getElementById('pretrain-output');
+  if (pretrainOutput) { pretrainOutput.style.display = 'none'; pretrainOutput.innerHTML = ''; }
+  var pretrainBtn = document.getElementById('btn-pretrain-inference');
+  if (pretrainBtn) { pretrainBtn.disabled = false; pretrainBtn.textContent = 'Generate'; }
 }
 
 registerAnim(8,

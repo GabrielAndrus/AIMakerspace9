@@ -8,25 +8,34 @@ function drawDGXSpark(canvas) {
   var w = canvas.width, h = canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  ctx.font = '11px "IBM Plex Mono", monospace';
+  ctx.font = '13px "IBM Plex Mono", monospace';
   ctx.textBaseline = 'top';
 
+  // Box-drawing chars via Unicode escapes to prevent encoding corruption
+  var TL='\u250C',TR='\u2510',BL='\u2514',BR='\u2518',H='\u2500',V='\u2502';
+  var DTL='\u2554',DTR='\u2557',DBL='\u255A',DBR='\u255D',DH='\u2550',DV='\u2551';
+  var hr = H.repeat(31);
+  var dhr = DH.repeat(19);
+  var sh = H.repeat(5);
+
   var lines = [
-    '┌───────────────────────────────┐',
-    '│    ╔═══════════════════╗      │',
-    '│    ║   DGX Spark       ║      │',
-    '│    ║   128GB · Grace   ║      │',
-    '│    ╚═══════════════════╝      │',
-    '│                               │',
-    '│  ┌─────┐ ┌─────┐ ┌─────┐    │',
-    '│  │ GPU │ │ GPU │ │ NVMe│    │',
-    '│  └─────┘ └─────┘ └─────┘    │',
-    '│                               │',
-    '│  docker compose up -d  ✓     │',
-    '└───────────────────────────────┘'
+    TL+hr+TR,
+    V+'    '+DTL+dhr+DTR+'      '+V,
+    V+'    '+DV+'   DGX Spark       '+DV+'      '+V,
+    V+'    '+DV+'   128GB \u00B7 Grace   '+DV+'      '+V,
+    V+'    '+DBL+dhr+DBR+'      '+V,
+    V+'                               '+V,
+    V+'  '+TL+sh+TR+' '+TL+sh+TR+' '+TL+sh+TR+'      '+V,
+    V+'  '+V+' GPU '+V+' '+V+' GPU '+V+' '+V+' NVMe'+V+'      '+V,
+    V+'  '+BL+sh+BR+' '+BL+sh+BR+' '+BL+sh+BR+'      '+V,
+    V+'                               '+V,
+    V+'  docker compose up -d  \u2713      '+V,
+    BL+hr+BR
   ];
 
-  var lineH = 14;
+  var BOX_CHARS = TL+TR+BL+BR+V+H+DTL+DTR+DBL+DBR+DV+DH;
+
+  var lineH = 17;
   var startY = (h - lines.length * lineH) / 2;
 
   for (var i = 0; i < lines.length; i++) {
@@ -36,11 +45,11 @@ function drawDGXSpark(canvas) {
     // Color the box-drawing chars in dim green, text in brighter
     for (var j = 0; j < line.length; j++) {
       var ch = line[j];
-      var x = (w - lines[0].length * 6.8) / 2 + j * 6.8;
+      var x = (w - lines[0].length * 8) / 2 + j * 8;
 
-      if ('┌┐└┘│─╔╗╚╝║═'.indexOf(ch) >= 0) {
+      if (BOX_CHARS.indexOf(ch) >= 0) {
         ctx.fillStyle = 'rgba(16,185,129,0.4)';
-      } else if (ch === '✓') {
+      } else if (ch === '\u2713') {
         ctx.fillStyle = '#b8bb26';
       } else if (i >= 2 && i <= 3 && j > 8 && j < 28) {
         ctx.fillStyle = '#ebdbb2';
@@ -143,8 +152,6 @@ function drawAgentNetwork(canvas, t) {
     // Node circle
     ctx.beginPath();
     ctx.arc(nx, ny, r, 0, Math.PI * 2);
-    ctx.fillStyle = isOrch ? 'rgba(255,255,255,0.06)' : a.color.replace(')', ',0.12)').replace('#', 'rgba(');
-    // Simple fill for hex colors
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.fill();
     ctx.strokeStyle = a.color;
@@ -211,7 +218,6 @@ registerAnim(2,
     drawDGXSpark(document.getElementById('dgx-spark-canvas'));
     buildServiceTags();
     animateServiceTags();
-    animateCustomerCards();
     agentPulses = [];
     animateAgentNetwork();
   },

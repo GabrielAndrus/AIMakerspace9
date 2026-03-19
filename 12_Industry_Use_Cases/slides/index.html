@@ -57,6 +57,17 @@
       <svg id="gauntlet-svg" viewBox="0 0 960 260" xmlns="http://www.w3.org/2000/svg"></svg>
     </div>
     <p style="color:var(--text-sec); font-size:0.9rem; margin-top:10px; text-align:center;">The barrier isn't data or compute &mdash; it's <strong style="color:var(--white);">knowing what decisions to make</strong>.</p>
+    <img src="photo-411_singular_display_fullPicture.jpg" alt="Team photo" style="max-width:500px; width:100%; border-radius:8px; margin-top:18px; border:1px solid var(--gold-border); box-shadow:0 0 20px rgba(201,168,76,0.06);">
+    <div style="display:flex; gap:24px; margin-top:24px; max-width:900px; width:100%;">
+      <div class="customer-card visible" style="flex:1; opacity:1; transform:none;">
+        <div class="customer-card-name" style="color:#22d3ee; font-size:1.6rem;">Veox</div>
+        <div class="customer-card-desc" style="font-size:1.1rem;">Engineering intelligence with evolution and excellent ML foundations.</div>
+      </div>
+      <div class="customer-card visible" style="flex:1; opacity:1; transform:none;">
+        <div class="customer-card-name" style="color:#f97316; font-size:1.6rem;">Forge Community</div>
+        <div class="customer-card-desc" style="font-size:1.1rem;">Forge Utah Foundation is a not-for-profit community for engineers and technologists. Our mission is to help grow technology education and talent in Utah by sharing, learning, and building.</div>
+      </div>
+    </div>
     <div style="position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-size:0.55rem; color:rgba(255,255,255,0.08); letter-spacing:1px; font-family:var(--mono);">introduce the Titanic dataset</div>
   </div>
 </div>
@@ -65,34 +76,21 @@
 <div class="slide" data-slide="2">
   <div class="inner" style="align-items:center; padding:0 24px;">
     <div class="eyebrow" style="color:var(--green);">Our Solution</div>
-    <h2 style="margin-bottom:16px;">Agents that make the hard decisions for you</h2>
+    <h2 style="margin-bottom:16px;">Platform &amp; Agent Stack</h2>
 
-    <div class="solution-columns">
-      <!-- LEFT: The Platform -->
-      <div class="solution-col solution-col-platform">
+    <div class="solution-columns" style="max-width:900px;">
+      <!-- LEFT: The Platform (50%) -->
+      <div class="solution-col" style="flex:0 0 48%;">
         <div class="solution-col-label">The Platform</div>
-        <canvas id="dgx-spark-canvas" width="340" height="200"></canvas>
+        <canvas id="dgx-spark-canvas" width="400" height="240"></canvas>
         <div class="solution-service-tags" id="solution-services"></div>
-        <div style="font-size:0.62rem; color:var(--text-dim); margin-top:8px; letter-spacing:0.5px; font-family:var(--mono);">Running on NVIDIA DGX Spark</div>
+        <div style="font-size:0.85rem; color:var(--text-dim); margin-top:10px; letter-spacing:0.5px; font-family:var(--mono);">Running on NVIDIA DGX Spark</div>
       </div>
 
-      <!-- CENTER: The Agents -->
-      <div class="solution-col solution-col-agents">
+      <!-- RIGHT: The Agents (50%) -->
+      <div class="solution-col" style="flex:0 0 48%;">
         <div class="solution-col-label">The Agents</div>
-        <canvas id="agent-network-canvas" width="320" height="320"></canvas>
-      </div>
-
-      <!-- RIGHT: Our Customers -->
-      <div class="solution-col solution-col-customers">
-        <div class="solution-col-label">Our Customers</div>
-        <div class="customer-card" id="customer-veox">
-          <div class="customer-card-name" style="color:#22d3ee;">Veox</div>
-          <div class="customer-card-desc">AI algorithm factory — evolving novel algorithms for enterprise data</div>
-        </div>
-        <div class="customer-card" id="customer-forge">
-          <div class="customer-card-name" style="color:#f97316;">Forge Utah</div>
-          <div class="customer-card-desc">Tech community for developers — meetups, roundtables, and conferences</div>
-        </div>
+        <canvas id="agent-network-canvas" width="400" height="380"></canvas>
       </div>
     </div>
   </div>
@@ -115,7 +113,7 @@
       </div>
       <!-- RIGHT: ASCII architecture canvas -->
       <div class="arch-diagram">
-        <canvas id="arch-canvas" width="560" height="380"></canvas>
+        <canvas id="arch-canvas" width="900" height="550"></canvas>
       </div>
     </div>
   </div>
@@ -519,6 +517,15 @@
             </div>
           </div>
           <button class="btn btn-purple btn-sm" id="btn-llm-train" onclick="startLLMTraining()" style="margin-top:12px;">Start Training</button>
+          <!-- Before Training inference -->
+          <div style="margin-top:14px; padding:14px; background:var(--surface); border:1px solid var(--border); border-radius:10px;">
+            <div style="font-size:0.78rem; font-weight:700; color:var(--gold); margin-bottom:8px;">Prompt: &ldquo;How do I build an agent?&rdquo;</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="font-size:0.72rem; font-weight:700; color:var(--red);">Before Training</div>
+              <button id="btn-pretrain-inference" class="btn btn-sm" style="background:var(--red); color:#1a1a1a; font-weight:700; font-size:0.65rem; padding:3px 10px;" onclick="runPretrainInference()">Generate</button>
+            </div>
+            <div id="pretrain-output" style="display:none; background:#1d2021; padding:10px 14px; border-radius:6px; font-family:var(--mono); font-size:0.7rem; color:rgba(235,219,178,0.5); line-height:1.6; min-height:2em; border:1px solid rgba(235,219,178,0.06);"></div>
+          </div>
         </div>
       </div>
 
@@ -560,12 +567,12 @@
           <div id="training-results" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
           <!-- Inference demo -->
           <div id="inference-demo" style="display:none; margin-top:14px; padding:14px; background:var(--surface); border:1px solid var(--gold-border); border-radius:10px;">
-            <div style="font-size:0.78rem; font-weight:700; color:var(--gold); margin-bottom:8px;">Try Your Fine-Tuned Model</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <input id="inference-input" type="text" value="How do I build an agent?" style="flex:1; padding:8px 12px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:0.75rem; font-family:var(--mono);">
-              <button id="btn-inference" class="btn btn-sm" style="background:var(--gold); color:#1a1a1a; font-weight:700;" onclick="runInference()">Generate</button>
+            <div style="font-size:0.78rem; font-weight:700; color:var(--gold); margin-bottom:8px;">Prompt: &ldquo;How do I build an agent?&rdquo;</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="font-size:0.72rem; font-weight:700; color:var(--green);">After Training</div>
+              <button id="btn-inference" class="btn btn-sm" style="background:var(--gold); color:#1a1a1a; font-weight:700; font-size:0.65rem; padding:3px 10px;" onclick="runInference()">Generate</button>
             </div>
-            <div id="inference-output" style="display:none; margin-top:10px; background:#1d2021; padding:10px 14px; border-radius:6px; font-family:var(--mono); font-size:0.7rem; color:#ebdbb2; line-height:1.6; min-height:2em;"></div>
+            <div id="inference-output" style="display:none; background:#1d2021; padding:10px 14px; border-radius:6px; font-family:var(--mono); font-size:0.7rem; color:#ebdbb2; line-height:1.6; min-height:2em; border:1px solid rgba(16,185,129,0.15);"></div>
           </div>
         </div>
       </div>
@@ -694,7 +701,7 @@
   <canvas class="ascii-orb" id="ascii-orb-10" width="1320" height="1320"></canvas>
   <div class="center stagger">
     <div class="eyebrow" style="color:var(--gold);">Thank You</div>
-    <h2>Everything you saw was <span class="gradient">live &amp; real</span></h2>
+    <h2>We taught the agents to do ML. <span class="gradient">They haven't asked to stop.</span></h2>
 
     <!-- Journey timeline -->
     <div class="journey-timeline" id="journey-timeline">
@@ -767,12 +774,12 @@
 <script src="js/slide01.js"></script>
 <script src="js/slide02.js"></script>
 <script src="js/slide03.js"></script>
-<script src="js/slide04.js"></script>
+<script src="js/slide04.js?v=2"></script>
 <script src="js/slide05.js?v=1773468615"></script>
 <script src="js/slide06.js"></script>
 <script src="js/slide07.js?v=2"></script>
 <script src="js/slide08.js"></script>
-<script src="js/slide09.js"></script>
+<script src="js/slide09.js?v=2"></script>
 <script src="js/slide10.js"></script>
 <script src="js/slide11.js?v=1773468615"></script>
 <script src="js/ascii-orb.js"></script>

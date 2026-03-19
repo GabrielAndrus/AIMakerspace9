@@ -13,6 +13,7 @@ from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 
 from src.config import settings
+from src.theme import theme, CSS_OVERRIDES
 
 # Metaflow's vendored typing_extensions monkey-patches typing._collect_parameters,
 # which breaks langsmith's class definitions (used transitively by langgraph).
@@ -97,15 +98,15 @@ def create_sample_csv() -> str:
 
 
 def format_error_html(message: str) -> str:
-    return f'<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #991b1b !important;">{message}</div>'
+    return f'<div style="background-color: rgba(239,68,68,0.08) !important; border-left: 4px solid #ef4444; padding: 12px; border-radius: 4px; color: #ef4444 !important;">{message}</div>'
 
 
 def format_warning_html(message: str) -> str:
-    return f'<div style="background-color: #fef3c7 !important; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; color: #92400e !important;">{message}</div>'
+    return f'<div style="background-color: rgba(245,158,11,0.10) !important; border-left: 4px solid #f59e0b; padding: 12px; border-radius: 4px; color: #f59e0b !important;">{message}</div>'
 
 
 def format_success_html(message: str) -> str:
-    return f'<div style="background-color: #d1fae5 !important; border-left: 4px solid #10b981; padding: 12px; border-radius: 4px; color: #065f46 !important;">{message}</div>'
+    return f'<div style="background-color: rgba(16,185,129,0.10) !important; border-left: 4px solid #10b981; padding: 12px; border-radius: 4px; color: #10b981 !important;">{message}</div>'
 
 
 def _run_error_investigation(error, tb_str, task_type, flow_name, flow_args, data_path=None):
@@ -136,22 +137,22 @@ def _run_error_investigation(error, tb_str, task_type, flow_name, flow_args, dat
 def _build_error_html(user_message, investigation_text, tb_str):
     """Build a consistent error HTML block with investigation results and traceback."""
     return f"""
-<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; color: #991b1b !important;">
-    <h3 style="color: #991b1b !important;">Training Failed</h3>
-    <p style="color: #991b1b !important;">{user_message.replace(chr(10), '<br>')}</p>
+<div style="background-color: rgba(239,68,68,0.08) !important; border-left: 4px solid #ef4444; padding: 12px; color: #ef4444 !important;">
+    <h3 style="color: #ef4444 !important;">Training Failed</h3>
+    <p style="color: #ef4444 !important;">{user_message.replace(chr(10), '<br>')}</p>
     {f'''
     <hr style="margin: 12px 0;">
     <details open>
-        <summary style="cursor: pointer; font-weight: bold; color: #991b1b !important;">🔍 Error Investigation Results</summary>
-        <div style="background-color: #f3f4f6 !important; padding: 12px; margin-top: 8px; border-radius: 4px;">
-            <pre style="white-space: pre-wrap; word-wrap: break-word; color: #1f2937 !important; background-color: #f3f4f6 !important;">{investigation_text}</pre>
+        <summary style="cursor: pointer; font-weight: bold; color: #ef4444 !important;">🔍 Error Investigation Results</summary>
+        <div style="background-color: #1a2a2e !important; padding: 12px; margin-top: 8px; border-radius: 4px;">
+            <pre style="white-space: pre-wrap; word-wrap: break-word; color: #f0f0f0 !important; background-color: #1a2a2e !important;">{investigation_text}</pre>
         </div>
     </details>
     ''' if investigation_text else ''}
     <hr style="margin: 12px 0;">
     <details>
-        <summary style="cursor: pointer; color: #991b1b !important;">View Technical Details</summary>
-        <pre style="background-color: #f3f4f6 !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #1f2937 !important;">{tb_str}</pre>
+        <summary style="cursor: pointer; color: #ef4444 !important;">View Technical Details</summary>
+        <pre style="background-color: #1a2a2e !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #f0f0f0 !important;">{tb_str}</pre>
     </details>
 </div>"""
 
@@ -835,7 +836,7 @@ def train_llm_model(
         
         if training_method != recommended_method:
             analysis_report += f"""
-<div style="background-color: #fef3c7; padding: 12px; border-radius: 4px; margin-top: 12px;">
+<div style="background-color: rgba(245,158,11,0.10); padding: 12px; border-radius: 4px; margin-top: 12px; color: #f59e0b;">
 <b>Note:</b> Agent recommended <b>{recommended_method}</b>, but you selected <b>{training_method}</b>.
 Your selection will be used.
 </div>"""
@@ -860,7 +861,7 @@ Your selection will be used.
         success_msg = f"""
 {analysis_report}
 <hr>
-<div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 12px; margin-top: 12px;">
+<div style="background-color: rgba(16,185,129,0.10); border-left: 4px solid #10b981; padding: 12px; margin-top: 12px; color: #10b981;">
 <b>Training Complete!</b><br>
 Run ID: {run_id}<br>
 Model saved to: {model_path}
@@ -1365,7 +1366,7 @@ def run_ragas_evaluation(retrieval_method: str = "dense", compare_methods: bool 
             df_comparison = pd.DataFrame(comparison_table_data)
             
             summary_html = f"""
-<div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 12px; margin-top: 12px;">
+<div style="background-color: rgba(16,185,129,0.10); border-left: 4px solid #10b981; padding: 12px; margin-top: 12px; color: #10b981;">
 <b>Comparison Complete!</b><br>
 Compared Dense vs Hybrid retrieval methods<br><br>
 <b>Average Scores:</b><br>
@@ -1386,7 +1387,7 @@ Compared Dense vs Hybrid retrieval methods<br><br>
             avg_scores = results["average_scores"]
             
             summary_html = f"""
-<div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 12px; margin-top: 12px;">
+<div style="background-color: rgba(16,185,129,0.10); border-left: 4px solid #10b981; padding: 12px; margin-top: 12px; color: #10b981;">
 <b>Evaluation Complete!</b><br>
 Retrieval Method: {retrieval_method.upper()}<br>
 Total Questions: {results['total_evaluated']}<br><br>
@@ -1405,12 +1406,12 @@ Total Questions: {results['total_evaluated']}<br><br>
         tb_str = traceback.format_exc()
         
         error_html = f"""
-<div style="background-color: #fee2e2 !important; border-left: 4px solid #ef4444; padding: 12px; color: #991b1b !important;">
-<h3 style="color: #991b1b !important;">Evaluation Failed</h3>
-<p style="color: #991b1b !important;">{str(e)}</p>
+<div style="background-color: rgba(239,68,68,0.08) !important; border-left: 4px solid #ef4444; padding: 12px; color: #ef4444 !important;">
+<h3 style="color: #ef4444 !important;">Evaluation Failed</h3>
+<p style="color: #ef4444 !important;">{str(e)}</p>
 <details>
-<summary style="cursor: pointer; margin-top: 12px; color: #991b1b !important;"><b>View Full Traceback</b></summary>
-<pre style="background-color: #f3f4f6 !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #1f2937 !important;">
+<summary style="cursor: pointer; margin-top: 12px; color: #ef4444 !important;"><b>View Full Traceback</b></summary>
+<pre style="background-color: #1a2a2e !important; padding: 12px; overflow-x: auto; margin-top: 8px; color: #f0f0f0 !important;">
 {tb_str}
 </pre>
 </details>
@@ -1596,7 +1597,7 @@ def create_llm_inference_tab() -> gr.Tab:
     return tab
 
 
-with gr.Blocks(title="Agentic AutoML Platform", theme="JohnSmith9982/small_and_pretty") as demo:
+with gr.Blocks(title="Agentic AutoML Platform", theme=theme, css=CSS_OVERRIDES) as demo:
     gr.Markdown("# Agentic AutoML Platform")
 
     create_tabular_ml_tab()

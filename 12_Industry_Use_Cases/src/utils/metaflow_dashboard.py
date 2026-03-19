@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from src.theme import theme, CSS_OVERRIDES
+
 METAFLOW_DIR = os.path.join(os.path.dirname(__file__), "..", "..", ".metaflow")
 
 
@@ -197,7 +199,7 @@ def on_run_select(flow_name: str, run_id: str) -> tuple:
 def create_dashboard():
     flow_names = get_flow_names()
     
-    with gr.Blocks(title="Metaflow Dashboard", theme="JohnSmith9982/small_and_pretty") as dashboard:
+    with gr.Blocks(title="Metaflow Dashboard", theme=theme, css=CSS_OVERRIDES) as dashboard:
         gr.Markdown("# Metaflow Dashboard")
         gr.Markdown("Real-time monitoring of your Metaflow training runs (auto-refreshes every 3s)")
         
