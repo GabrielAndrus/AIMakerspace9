@@ -1,96 +1,224 @@
 /* ══════════════════════════════════════════════════════════════
-   SLIDE 3: AGENT CONSTELLATION (slide index 2)
+   SLIDE 3: OUR SOLUTION — Platform / Agents / Customers (slide index 2)
    ══════════════════════════════════════════════════════════════ */
 
-function buildConstellation() {
-  const svg = document.getElementById('constellation-svg');
-  if (svg.childNodes.length > 0) return;
+/* ── DGX Spark ASCII box diagram ── */
+function drawDGXSpark(canvas) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
 
-  const NS = 'http://www.w3.org/2000/svg';
-  function el(tag, attrs) {
-    const e = document.createElementNS(NS, tag);
-    for (const [k,v] of Object.entries(attrs)) e.setAttribute(k, v);
-    return e;
-  }
+  ctx.font = '11px "IBM Plex Mono", monospace';
+  ctx.textBaseline = 'top';
 
-  const cx = 300, cy = 200, cr = 50;
-  const agents = [
-    { label: 'Model Selection', desc: 'Picks the best algorithm for your data', color: '#f97316', angle: -30, icon: '\u2699' },
-    { label: 'Dataset Analyzer', desc: 'Detects your data format automatically', color: '#818cf8', angle: 210, icon: '\ud83d\udd0d' },
-    { label: 'Error Investigation', desc: 'Diagnoses failures & suggests fixes', color: '#ef4444', angle: 90, icon: '\ud83d\udee1' },
+  var lines = [
+    '┌───────────────────────────────┐',
+    '│    ╔═══════════════════╗      │',
+    '│    ║   DGX Spark       ║      │',
+    '│    ║   128GB · Grace   ║      │',
+    '│    ╚═══════════════════╝      │',
+    '│                               │',
+    '│  ┌─────┐ ┌─────┐ ┌─────┐    │',
+    '│  │ GPU │ │ GPU │ │ NVMe│    │',
+    '│  └─────┘ └─────┘ └─────┘    │',
+    '│                               │',
+    '│  docker compose up -d  ✓     │',
+    '└───────────────────────────────┘'
   ];
 
-  // Center circle with pulse
-  const centerPulse = el('circle', { cx: cx, cy: cy, r: '55', fill: 'none', stroke: '#e2e8f0', 'stroke-width': '1', opacity: '0.3' });
-  const pulseAnim = el('animate', { attributeName: 'r', values: '50;60;50', dur: '3s', repeatCount: 'indefinite' });
-  centerPulse.appendChild(pulseAnim);
-  const pulseOpac = el('animate', { attributeName: 'opacity', values: '0.3;0.1;0.3', dur: '3s', repeatCount: 'indefinite' });
-  centerPulse.appendChild(pulseOpac);
-  svg.appendChild(centerPulse);
+  var lineH = 14;
+  var startY = (h - lines.length * lineH) / 2;
 
-  const centerCircle = el('circle', { cx: cx, cy: cy, r: cr, fill: 'rgba(226,232,240,0.08)', stroke: '#e2e8f0', 'stroke-width': '2' });
-  svg.appendChild(centerCircle);
-  const centerLabel = el('text', { x: cx, y: cy + 5, 'text-anchor': 'middle', fill: '#e2e8f0', 'font-size': '14', 'font-weight': '700', 'font-family': 'Inter, sans-serif' });
-  centerLabel.textContent = 'Your Data';
-  svg.appendChild(centerLabel);
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var y = startY + i * lineH;
 
-  // Agent nodes
-  const agentRadius = 160;
-  agents.forEach((a, i) => {
-    const rad = a.angle * Math.PI / 180;
-    const ax = cx + Math.cos(rad) * agentRadius;
-    const ay = cy + Math.sin(rad) * agentRadius;
+    // Color the box-drawing chars in dim green, text in brighter
+    for (var j = 0; j < line.length; j++) {
+      var ch = line[j];
+      var x = (w - lines[0].length * 6.8) / 2 + j * 6.8;
 
-    // Connection line (dashed)
-    const line = el('line', { x1: cx, y1: cy, x2: ax, y2: ay, stroke: a.color, 'stroke-width': '1.5', 'stroke-dasharray': '6 4', opacity: '0.4', class: 'const-line' });
-    svg.appendChild(line);
+      if ('┌┐└┘│─╔╗╚╝║═'.indexOf(ch) >= 0) {
+        ctx.fillStyle = 'rgba(16,185,129,0.4)';
+      } else if (ch === '✓') {
+        ctx.fillStyle = '#b8bb26';
+      } else if (i >= 2 && i <= 3 && j > 8 && j < 28) {
+        ctx.fillStyle = '#ebdbb2';
+      } else {
+        ctx.fillStyle = 'rgba(235,219,178,0.35)';
+      }
+      ctx.fillText(ch, x, y);
+    }
+  }
+}
 
-    // Flow dot along the line
-    const flowDot = el('circle', { r: '3', fill: a.color, class: 'flow-dot' });
-    const flowMotion = el('animateMotion', { dur: '2s', repeatCount: 'indefinite', begin: `${i * 0.6}s`, path: `M${cx},${cy} L${ax},${ay}` });
-    // Use relative path
-    const fmPath = el('animateMotion', { dur: '2s', repeatCount: 'indefinite', begin: `${i * 0.6}s`, path: `M0,0 L${ax-cx},${ay-cy}` });
-    flowDot.setAttribute('cx', String(cx));
-    flowDot.setAttribute('cy', String(cy));
-    flowDot.appendChild(fmPath);
-    svg.appendChild(flowDot);
+/* ── Agent Network Canvas ── */
+var agentAnimFrame = null;
 
-    // Agent group
-    const g = el('g', { class: 'const-agent', id: `const-agent-${i}`, style: `transform-origin: ${ax}px ${ay}px` });
+var AGENTS = [
+  { label: 'Orchestrator',     color: '#ffffff',  x: 0.50, y: 0.22 },
+  { label: 'Model Selection',  color: '#f97316',  x: 0.20, y: 0.45 },
+  { label: 'Dataset Analyzer', color: '#818cf8',  x: 0.80, y: 0.45 },
+  { label: 'Error Investigator', color: '#ef4444', x: 0.20, y: 0.72 },
+  { label: 'Feature Engineer', color: '#22d3ee',  x: 0.50, y: 0.82 },
+  { label: 'Training Monitor', color: '#f59e0b',  x: 0.80, y: 0.72 }
+];
 
-    const agentCircle = el('circle', { cx: ax, cy: ay, r: '36', fill: a.color.replace(')', ',0.1)').replace('#', 'rgba(').replace(/([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/, (m,r,g,b) => `${parseInt(r,16)},${parseInt(g,16)},${parseInt(b,16)}`), stroke: a.color, 'stroke-width': '2' });
-    // Simpler fill approach
-    agentCircle.setAttribute('fill', 'rgba(0,0,0,0.3)');
-    g.appendChild(agentCircle);
+var AGENT_EDGES = [
+  [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],  // orchestrator hub
+  [1, 3], [2, 5], [1, 4], [2, 4]            // cross-connections
+];
 
-    const agentIcon = el('text', { x: ax, y: ay - 2, 'text-anchor': 'middle', fill: a.color, 'font-size': '18' });
-    agentIcon.textContent = a.icon;
-    g.appendChild(agentIcon);
+var agentPulses = [];
 
-    const agentLabel = el('text', { x: ax, y: String(parseFloat(ay) + 52), 'text-anchor': 'middle', fill: a.color, 'font-size': '11', 'font-weight': '700', 'font-family': 'Inter, sans-serif' });
-    agentLabel.textContent = a.label;
-    g.appendChild(agentLabel);
+function drawAgentNetwork(canvas, t) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
 
-    const agentDesc = el('text', { x: ax, y: String(parseFloat(ay) + 66), 'text-anchor': 'middle', fill: '#94a3b8', 'font-size': '9', 'font-weight': '400', 'font-family': 'Inter, sans-serif' });
-    agentDesc.textContent = a.desc;
-    g.appendChild(agentDesc);
+  var pad = 30;
+  var aw = w - pad * 2, ah = h - pad * 2;
 
-    svg.appendChild(g);
+  // Draw edges
+  for (var e = 0; e < AGENT_EDGES.length; e++) {
+    var from = AGENTS[AGENT_EDGES[e][0]];
+    var to   = AGENTS[AGENT_EDGES[e][1]];
+    var x1 = pad + from.x * aw, y1 = pad + from.y * ah;
+    var x2 = pad + to.x * aw,   y2 = pad + to.y * ah;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Spawn pulses
+  if (Math.random() < 0.04) {
+    var edgeIdx = Math.floor(Math.random() * AGENT_EDGES.length);
+    agentPulses.push({ edge: edgeIdx, progress: 0 });
+  }
+
+  // Draw pulses
+  for (var p = agentPulses.length - 1; p >= 0; p--) {
+    var pulse = agentPulses[p];
+    pulse.progress += 0.018;
+    if (pulse.progress > 1) { agentPulses.splice(p, 1); continue; }
+
+    var pe = AGENT_EDGES[pulse.edge];
+    var pf = AGENTS[pe[0]], pt = AGENTS[pe[1]];
+    var px = pad + (pf.x + (pt.x - pf.x) * pulse.progress) * aw;
+    var py = pad + (pf.y + (pt.y - pf.y) * pulse.progress) * ah;
+    var pc = pt.color;
+
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fillStyle = pc;
+    ctx.globalAlpha = 0.7;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw nodes
+  for (var i = 0; i < AGENTS.length; i++) {
+    var a = AGENTS[i];
+    var nx = pad + a.x * aw;
+    var ny = pad + a.y * ah;
+    var isOrch = i === 0;
+    var r = isOrch ? 20 : 14;
+
+    // Glow ring on orchestrator
+    if (isOrch) {
+      var pulse2 = Math.sin(t * 0.002) * 0.5 + 0.5;
+      ctx.beginPath();
+      ctx.arc(nx, ny, r + 4 + pulse2 * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,' + (0.06 + pulse2 * 0.06) + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(nx, ny, r, 0, Math.PI * 2);
+    ctx.fillStyle = isOrch ? 'rgba(255,255,255,0.06)' : a.color.replace(')', ',0.12)').replace('#', 'rgba(');
+    // Simple fill for hex colors
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fill();
+    ctx.strokeStyle = a.color;
+    ctx.lineWidth = isOrch ? 2 : 1.5;
+    ctx.stroke();
+
+    // Label
+    ctx.font = (isOrch ? 'bold 10px' : '9px') + ' "IBM Plex Mono", monospace';
+    ctx.fillStyle = a.color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(a.label, nx, ny + r + 12);
+  }
+}
+
+function animateAgentNetwork() {
+  var canvas = document.getElementById('agent-network-canvas');
+  if (!canvas) return;
+  drawAgentNetwork(canvas, performance.now());
+  agentAnimFrame = requestAnimationFrame(animateAgentNetwork);
+}
+
+/* ── Service tags ── */
+var SERVICES = [
+  { name: 'Gradio',     port: ':7860' },
+  { name: 'Qdrant',     port: ':6333' },
+  { name: 'Langfuse',   port: ':3000' },
+  { name: 'Metaflow',   port: ':3001' },
+  { name: 'PostgreSQL',  port: ':5432' },
+  { name: 'ClickHouse', port: ':8123' },
+  { name: 'Redis',      port: ':6379' },
+  { name: 'MinIO',      port: ':9090' }
+];
+
+function buildServiceTags() {
+  var container = document.getElementById('solution-services');
+  if (!container || container.children.length > 0) return;
+
+  for (var i = 0; i < SERVICES.length; i++) {
+    var tag = document.createElement('span');
+    tag.className = 'solution-service-tag';
+    tag.textContent = SERVICES[i].name + ' ' + SERVICES[i].port;
+    container.appendChild(tag);
+  }
+}
+
+function animateServiceTags() {
+  var tags = document.querySelectorAll('.solution-service-tag');
+  tags.forEach(function(tag, i) {
+    setTimeout(function() { tag.classList.add('visible'); }, 200 + i * 80);
   });
 }
 
-let constellationPlayed = false;
-function playConstellation() {
-  if (constellationPlayed) return;
-  constellationPlayed = true;
-  [0, 1, 2].forEach((i) => {
-    setTimeout(() => {
-      document.getElementById(`const-agent-${i}`)?.classList.add('visible');
-    }, 400 + i * 500);
+function animateCustomerCards() {
+  var cards = document.querySelectorAll('.customer-card');
+  cards.forEach(function(card, i) {
+    setTimeout(function() { card.classList.add('visible'); }, 600 + i * 300);
   });
 }
 
+/* ── Lifecycle ── */
 registerAnim(2,
-  function enter() { buildConstellation(); playConstellation(); },
-  null
+  function enter() {
+    drawDGXSpark(document.getElementById('dgx-spark-canvas'));
+    buildServiceTags();
+    animateServiceTags();
+    animateCustomerCards();
+    agentPulses = [];
+    animateAgentNetwork();
+  },
+  function leave() {
+    if (agentAnimFrame) {
+      cancelAnimationFrame(agentAnimFrame);
+      agentAnimFrame = null;
+    }
+  }
 );

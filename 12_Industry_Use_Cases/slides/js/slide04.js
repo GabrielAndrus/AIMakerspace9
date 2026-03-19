@@ -1,190 +1,220 @@
 /* ══════════════════════════════════════════════════════════════
-   SLIDE 4: ISOMETRIC ARCHITECTURE + BOOT SEQUENCE
+   SLIDE 4: ASCII ARCHITECTURE + BOOT SEQUENCE (slide index 3)
    ══════════════════════════════════════════════════════════════ */
 
-function buildIsometricSVG() {
-  const svg = document.getElementById('iso-svg');
-  // Helper: draw an isometric box
-  function isoBox(cx, cy, w, h, d, fill, stroke, label, port) {
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-
-    // Top face
-    const top = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    top.setAttribute('points',
-      `${cx},${cy - d} ${cx + w / 2},${cy - d + h * 0.3} ${cx},${cy - d + h * 0.6} ${cx - w / 2},${cy - d + h * 0.3}`);
-    top.setAttribute('fill', fill);
-    top.setAttribute('fill-opacity', '0.3');
-    top.setAttribute('stroke', stroke);
-    top.setAttribute('stroke-width', '1.5');
-
-    // Left face
-    const left = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    left.setAttribute('points',
-      `${cx - w / 2},${cy - d + h * 0.3} ${cx},${cy - d + h * 0.6} ${cx},${cy + h * 0.6 - d + d} ${cx - w / 2},${cy + h * 0.3 - d + d}`);
-    left.setAttribute('fill', fill);
-    left.setAttribute('fill-opacity', '0.15');
-    left.setAttribute('stroke', stroke);
-    left.setAttribute('stroke-width', '1');
-
-    // Right face
-    const right = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    right.setAttribute('points',
-      `${cx + w / 2},${cy - d + h * 0.3} ${cx},${cy - d + h * 0.6} ${cx},${cy + h * 0.6 - d + d} ${cx + w / 2},${cy + h * 0.3 - d + d}`);
-    right.setAttribute('fill', fill);
-    right.setAttribute('fill-opacity', '0.08');
-    right.setAttribute('stroke', stroke);
-    right.setAttribute('stroke-width', '1');
-
-    g.appendChild(left);
-    g.appendChild(right);
-    g.appendChild(top);
-
-    // Label
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', cx);
-    text.setAttribute('y', cy - d + h * 0.25);
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('fill', stroke);
-    text.setAttribute('font-family', 'Inter, sans-serif');
-    text.setAttribute('font-weight', '700');
-    text.setAttribute('font-size', '13');
-    text.textContent = label;
-    g.appendChild(text);
-
-    // Port
-    if (port) {
-      const pText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      pText.setAttribute('x', cx);
-      pText.setAttribute('y', cy - d + h * 0.25 + 16);
-      pText.setAttribute('text-anchor', 'middle');
-      pText.setAttribute('fill', '#64748b');
-      pText.setAttribute('font-family', 'JetBrains Mono, monospace');
-      pText.setAttribute('font-size', '10');
-      pText.textContent = port;
-      g.appendChild(pText);
-    }
-
-    svg.appendChild(g);
-    return g;
-  }
-
-  // Connection dots path helper
-  function addFlowDots(x1, y1, x2, y2, color, delayMs) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-    line.setAttribute('stroke', color);
-    line.setAttribute('stroke-width', '1');
-    line.setAttribute('stroke-opacity', '0.2');
-    line.setAttribute('stroke-dasharray', '3 6');
-    svg.appendChild(line);
-
-    // Animated dot
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('r', '3');
-    circle.setAttribute('fill', color);
-    circle.setAttribute('opacity', '0.7');
-    const anim = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
-    anim.setAttribute('dur', '2.5s');
-    anim.setAttribute('repeatCount', 'indefinite');
-    anim.setAttribute('begin', `${delayMs}ms`);
-    anim.setAttribute('path', `M${x1},${y1} L${x2},${y2}`);
-    // Use path-based motion instead
-    const motionPath = document.createElementNS('http://www.w3.org/2000/svg', 'animateMotion');
-    motionPath.setAttribute('dur', '2.5s');
-    motionPath.setAttribute('repeatCount', 'indefinite');
-    motionPath.setAttribute('begin', `${delayMs}ms`);
-    const pathD = `M0,0 L${x2-x1},${y2-y1}`;
-    motionPath.setAttribute('path', pathD);
-    circle.setAttribute('cx', x1);
-    circle.setAttribute('cy', y1);
-    circle.appendChild(motionPath);
-    svg.appendChild(circle);
-  }
-
-  // Clear
-  svg.innerHTML = '';
-
-  // Layer labels
-  function addLabel(x, y, text, color) {
-    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    t.setAttribute('x', x); t.setAttribute('y', y);
-    t.setAttribute('fill', color); t.setAttribute('font-family', 'Inter, sans-serif');
-    t.setAttribute('font-size', '10'); t.setAttribute('font-weight', '700');
-    t.setAttribute('letter-spacing', '2'); t.setAttribute('text-transform', 'uppercase');
-    t.textContent = text;
-    svg.appendChild(t);
-  }
-
-  addLabel(20, 50, 'USER INTERFACE', '#f97316');
-  addLabel(20, 175, 'INTELLIGENCE LAYER', '#818cf8');
-  addLabel(20, 310, 'DATA LAYER', '#64748b');
-
-  // Top layer: Gradio (wide)
-  isoBox(450, 85, 500, 60, 20, '#f97316', '#f97316', 'Gradio WebUI', ':7860');
-
-  // Middle layer
-  isoBox(250, 215, 200, 50, 18, '#22d3ee', '#22d3ee', 'Qdrant', ':6333');
-  isoBox(450, 215, 200, 50, 18, '#f59e0b', '#f59e0b', 'Langfuse', ':3000');
-  isoBox(650, 215, 200, 50, 18, '#10b981', '#10b981', 'Metaflow', ':3001');
-
-  // Bottom layer
-  isoBox(175, 350, 160, 44, 15, '#64748b', '#64748b', 'PostgreSQL', ':5432');
-  isoBox(350, 350, 160, 44, 15, '#64748b', '#64748b', 'ClickHouse', ':8123');
-  isoBox(525, 350, 160, 44, 15, '#64748b', '#64748b', 'Redis', ':6379');
-  isoBox(700, 350, 160, 44, 15, '#64748b', '#64748b', 'MinIO', ':9090');
-
-  // Flow connections: Gradio → Intelligence layer
-  addFlowDots(350, 115, 250, 190, '#f97316', 0);
-  addFlowDots(450, 115, 450, 190, '#f97316', 400);
-  addFlowDots(550, 115, 650, 190, '#f97316', 800);
-
-  // Intelligence → Data layer
-  addFlowDots(250, 250, 175, 325, '#22d3ee', 200);
-  addFlowDots(450, 250, 350, 325, '#f59e0b', 600);
-  addFlowDots(650, 250, 525, 325, '#10b981', 1000);
-  addFlowDots(650, 250, 700, 325, '#10b981', 1200);
-}
-
-const BOOT_SERVICES = [
-  { name: 'PostgreSQL', port: 5432 },
-  { name: 'ClickHouse', port: 8123 },
-  { name: 'Redis', port: 6379 },
-  { name: 'MinIO', port: 9090 },
-  { name: 'Qdrant', port: 6333 },
-  { name: 'Langfuse', port: 3000 },
-  { name: 'Metaflow', port: 3001 },
-  { name: 'Gradio WebUI', port: 7860 },
+var ARCH_SERVICES = [
+  { name: 'Gradio',     port: ':7860', color: '#f97316', layer: 0, col: 1.5 },
+  { name: 'Qdrant',     port: ':6333', color: '#22d3ee', layer: 1, col: 0 },
+  { name: 'Langfuse',   port: ':3000', color: '#f59e0b', layer: 1, col: 1 },
+  { name: 'Metaflow',   port: ':3001', color: '#10b981', layer: 1, col: 2 },
+  // Bottom row intentionally uses the same col mapping but spread wider
+  { name: 'PostgreSQL', port: ':5432', color: '#928374', layer: 2, col: -0.1 },
+  { name: 'ClickHouse', port: ':8123', color: '#928374', layer: 2, col: 0.8 },
+  { name: 'Redis',      port: ':6379', color: '#928374', layer: 2, col: 1.7 },
+  { name: 'MinIO',      port: ':9090', color: '#928374', layer: 2, col: 2.6 }
 ];
 
-let bootAnimDone = false;
+var ARCH_CONNECTIONS = [
+  // Gradio → middle
+  { from: 0, to: 1 }, { from: 0, to: 2 }, { from: 0, to: 3 },
+  // Middle → bottom
+  { from: 1, to: 4 }, { from: 2, to: 5 }, { from: 3, to: 6 }, { from: 3, to: 7 }
+];
+
+var archPulses = [];
+var archAnimFrame = null;
+var archServiceLit = [];
+
+function getServicePos(svc, w, h) {
+  var padX = 60, padY = 50;
+  var layerH = (h - padY * 2) / 2;
+  var y = padY + svc.layer * layerH;
+
+  var colCount = svc.layer === 0 ? 1 : (svc.layer === 1 ? 3 : 4);
+  var colW = (w - padX * 2) / (svc.layer === 2 ? 3.5 : 2);
+  var startX = svc.layer === 0 ? w / 2 : padX + (svc.layer === 2 ? -10 : 0);
+  var x = svc.layer === 0 ? w / 2 : startX + svc.col * colW;
+
+  return { x: x, y: y };
+}
+
+function drawArchBox(ctx, x, y, label, port, color, lit) {
+  var bw = 90, bh = 40;
+  var lx = x - bw / 2, ly = y - bh / 2;
+
+  // Box-drawing style with ASCII corners
+  ctx.strokeStyle = lit ? color : 'rgba(235,219,178,0.15)';
+  ctx.lineWidth = lit ? 1.5 : 1;
+  ctx.strokeRect(lx, ly, bw, bh);
+
+  if (lit) {
+    ctx.fillStyle = color.replace(')', ',0.06)').replace('#', 'rgba(');
+    // Simple hex→rgba
+    var r = parseInt(color.slice(1,3), 16);
+    var g = parseInt(color.slice(3,5), 16);
+    var b = parseInt(color.slice(5,7), 16);
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',0.06)';
+    ctx.fillRect(lx, ly, bw, bh);
+  }
+
+  // Label
+  ctx.font = 'bold 10px "IBM Plex Mono", monospace';
+  ctx.fillStyle = lit ? color : 'rgba(235,219,178,0.4)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y - 5);
+
+  // Port
+  ctx.font = '9px "IBM Plex Mono", monospace';
+  ctx.fillStyle = lit ? 'rgba(235,219,178,0.5)' : 'rgba(235,219,178,0.2)';
+  ctx.fillText(port, x, y + 10);
+}
+
+function drawArchitecture(canvas, t) {
+  var ctx = canvas.getContext('2d');
+  var w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Layer labels
+  ctx.font = 'bold 9px "IBM Plex Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(249,115,22,0.5)';
+  ctx.fillText('USER INTERFACE', 10, 30);
+  ctx.fillStyle = 'rgba(129,140,248,0.5)';
+  ctx.fillText('AI DECISION LAYER', 10, 155);
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillText('STORAGE & LOGGING', 10, 290);
+
+  // Connections
+  for (var c = 0; c < ARCH_CONNECTIONS.length; c++) {
+    var conn = ARCH_CONNECTIONS[c];
+    var fromSvc = ARCH_SERVICES[conn.from];
+    var toSvc = ARCH_SERVICES[conn.to];
+    var p1 = getServicePos(fromSvc, w, h);
+    var p2 = getServicePos(toSvc, w, h);
+
+    ctx.strokeStyle = 'rgba(235,219,178,0.06)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 6]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y + 20);
+    ctx.lineTo(p2.x, p2.y - 20);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrow
+    var ax = p2.x, ay = p2.y - 22;
+    ctx.fillStyle = 'rgba(235,219,178,0.1)';
+    ctx.beginPath();
+    ctx.moveTo(ax, ay + 4);
+    ctx.lineTo(ax - 3, ay - 2);
+    ctx.lineTo(ax + 3, ay - 2);
+    ctx.fill();
+  }
+
+  // Spawn pulses
+  if (Math.random() < 0.03) {
+    var ci = Math.floor(Math.random() * ARCH_CONNECTIONS.length);
+    archPulses.push({ conn: ci, progress: 0 });
+  }
+
+  // Draw pulses
+  for (var p = archPulses.length - 1; p >= 0; p--) {
+    var pulse = archPulses[p];
+    pulse.progress += 0.015;
+    if (pulse.progress > 1) { archPulses.splice(p, 1); continue; }
+
+    var pc = ARCH_CONNECTIONS[pulse.conn];
+    var pf = getServicePos(ARCH_SERVICES[pc.from], w, h);
+    var pt = getServicePos(ARCH_SERVICES[pc.to], w, h);
+    var px = pf.x + (pt.x - pf.x) * pulse.progress;
+    var py = (pf.y + 20) + ((pt.y - 20) - (pf.y + 20)) * pulse.progress;
+
+    ctx.beginPath();
+    ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = ARCH_SERVICES[pc.to].color;
+    ctx.globalAlpha = 0.6;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw service boxes
+  for (var i = 0; i < ARCH_SERVICES.length; i++) {
+    var svc = ARCH_SERVICES[i];
+    var pos = getServicePos(svc, w, h);
+    var lit = archServiceLit[i] || false;
+    drawArchBox(ctx, pos.x, pos.y, svc.name, svc.port, svc.color, lit);
+  }
+}
+
+function animateArch() {
+  var canvas = document.getElementById('arch-canvas');
+  if (!canvas) return;
+  drawArchitecture(canvas, performance.now());
+  archAnimFrame = requestAnimationFrame(animateArch);
+}
+
+/* ── Boot sequence (synced with diagram) ── */
+var BOOT_ORDER = [
+  { name: 'PostgreSQL', port: 5432, archIdx: 4 },
+  { name: 'ClickHouse', port: 8123, archIdx: 5 },
+  { name: 'Redis',      port: 6379, archIdx: 6 },
+  { name: 'MinIO',      port: 9090, archIdx: 7 },
+  { name: 'Qdrant',     port: 6333, archIdx: 1 },
+  { name: 'Langfuse',   port: 3000, archIdx: 2 },
+  { name: 'Metaflow',   port: 3001, archIdx: 3 },
+  { name: 'Gradio WebUI', port: 7860, archIdx: 0 }
+];
+
+var bootAnimDone = false;
+
 function runBootSequence() {
   if (bootAnimDone) return;
   bootAnimDone = true;
-  const terminal = document.getElementById('boot-terminal');
-  BOOT_SERVICES.forEach((svc, i) => {
-    setTimeout(() => {
-      const line = document.createElement('div');
+
+  var terminal = document.getElementById('boot-terminal');
+  if (!terminal) return;
+  var body = terminal.querySelector('.boot-terminal-body');
+  if (!body) return;
+
+  archServiceLit = [];
+
+  BOOT_ORDER.forEach(function(svc, i) {
+    setTimeout(function() {
+      // Terminal line
+      var line = document.createElement('div');
       line.className = 'boot-line';
-      line.innerHTML = `<span class="boot-check">✓</span> ${svc.name} <span style="color:var(--text-dim);">:${svc.port}</span>`;
-      terminal.appendChild(line);
-      // Trigger transition
-      requestAnimationFrame(() => line.classList.add('visible'));
+      line.innerHTML = '<span class="boot-check">\u2713</span> ' + svc.name + ' <span style="color:#928374;">:' + svc.port + '</span>';
+      body.appendChild(line);
+      requestAnimationFrame(function() { line.classList.add('visible'); });
+
+      // Light up service in diagram
+      archServiceLit[svc.archIdx] = true;
     }, 600 + i * 300);
   });
-  // "All services up" after all
-  setTimeout(() => {
-    const line = document.createElement('div');
+
+  // "All services up" message
+  setTimeout(function() {
+    var line = document.createElement('div');
     line.className = 'boot-line';
-    line.innerHTML = '<span style="color:var(--green);">All 8 services running.</span>';
-    terminal.appendChild(line);
-    requestAnimationFrame(() => line.classList.add('visible'));
-  }, 600 + BOOT_SERVICES.length * 300 + 200);
+    line.innerHTML = '<span style="color:#b8bb26;">All 8 services running.</span>';
+    body.appendChild(line);
+    requestAnimationFrame(function() { line.classList.add('visible'); });
+  }, 600 + BOOT_ORDER.length * 300 + 200);
 }
 
-// Build SVG immediately, animate on enter
-buildIsometricSVG();
 registerAnim(3,
-  function enter() { runBootSequence(); },
-  null
+  function enter() {
+    archPulses = [];
+    archServiceLit = [];
+    animateArch();
+    runBootSequence();
+  },
+  function leave() {
+    if (archAnimFrame) {
+      cancelAnimationFrame(archAnimFrame);
+      archAnimFrame = null;
+    }
+  }
 );
